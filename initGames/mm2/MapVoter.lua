@@ -31,13 +31,35 @@ local MapVoterToggles = getgenv().Toggles
 getgenv().Options = MainOptions
 getgenv().Toggles = MainToggles
 
---// Vote Pad Positions
+--// Positions
 
 local VotePadPositions = {
-	Left = Vector3.new(-10.187439, -64.8124008, -95.0001221),
-	Center = Vector3.new(-0.187438965, -64.8124008, -96.2501221),
-	Right = Vector3.new(9.81256104, -64.8124008, -95.0001221)
+	Left = Vector3.new(
+		-10.187439,
+		-64.8124008,
+		-95.0001221
+	),
+
+	Center = Vector3.new(
+		-0.187438965,
+		-64.8124008,
+		-96.2501221
+	),
+
+	Right = Vector3.new(
+		9.81256104,
+		-64.8124008,
+		-95.0001221
+	)
 }
+
+-- Position used after all voting cycles are complete.
+
+local FinalPosition = Vector3.new(
+	-0.187438965, 
+    -68.437439, 
+    -63.7501221
+)
 
 --// State
 
@@ -79,6 +101,7 @@ VotingGroup:AddDropdown("MM2VotePad", {
 	Multi = false,
 
 	Text = "Vote Pad",
+
 	Tooltip = "Select the vote pad to use."
 })
 
@@ -90,6 +113,7 @@ VotingGroup:AddInput("MM2TeleportCount", {
 	Finished = false,
 
 	Text = "Teleport Count",
+
 	Placeholder = "Enter amount",
 
 	Tooltip = "Number of teleport/death cycles."
@@ -103,9 +127,10 @@ VotingGroup:AddInput("MM2VoteWait", {
 	Finished = false,
 
 	Text = "Vote Wait",
+
 	Placeholder = "Seconds",
 
-	Tooltip = "How long to stay on the vote pad before dying."
+	Tooltip = "How long to remain on the vote pad before dying."
 })
 
 --// Capture Options
@@ -209,6 +234,8 @@ VotingGroup:AddButton({
 
 		task.spawn(function()
 
+			--// Voting Loop
+
 			for i = 1, Count do
 
 				if not Running or Unloaded then
@@ -242,11 +269,11 @@ VotingGroup:AddButton({
 					"HumanoidRootPart"
 				)
 
-				-- Teleport to selected pad.
+				-- Teleport to selected vote pad.
 
 				HumanoidRootPart.CFrame = CFrame.new(Position)
 
-				-- Wait for the vote pad to register the player.
+				-- Allow the vote pad to register the player.
 
 				SetStatus(
 					("Voting... %.2fs"):format(VoteWait)
@@ -285,7 +312,7 @@ VotingGroup:AddButton({
 						break
 					end
 
-					-- Wait for the new character.
+					-- Wait for new character.
 
 					local NewCharacter = Player.Character
 
@@ -294,15 +321,38 @@ VotingGroup:AddButton({
 				end
 			end
 
-			--// Complete
+			--// Finished
 
 			if Unloaded then
 				return
 			end
 
 			if Running then
+
+				-- Make sure we have the final character.
+
+				local Character = Player.Character
+
+				if Character then
+
+					local HumanoidRootPart =
+						Character:FindFirstChild("HumanoidRootPart")
+
+					if HumanoidRootPart then
+
+						SetStatus("Moving to viewing position...")
+
+						-- Move player to the final viewing position.
+
+						HumanoidRootPart.CFrame =
+							CFrame.new(FinalPosition)
+
+					end
+				end
+
 				SetProgress(Count, Count)
 				SetStatus("Finished")
+
 			else
 				SetStatus("Stopped")
 			end
