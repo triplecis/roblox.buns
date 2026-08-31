@@ -5,6 +5,7 @@ local Player = game:GetService("Players").LocalPlayer
 local PlayerUserId = tostring(Player.UserId)
 
 local PlotsFolder = workspace.Plots
+local AreaEggs = workspace:WaitForChild("AreaEggSlotsClient") 
 
 local PlayerPlot = nil
 
