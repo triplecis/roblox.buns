@@ -1,4 +1,5 @@
 --// MM2 Map Voter //--
+local UserInputService = game:GetService("UserInputService")
 
 local Players = game:GetService("Players")
 
@@ -18,12 +19,16 @@ local SelectedPad = "Left"
 local TeleportCount = 1
 local Running = false
 
+local Dragging = false
+local DragStart
+local StartPosition
+
 --// GUI
 
 local ScreenGui = Instance.new("ScreenGui")
 ScreenGui.Name = "MM2MapVoter"
 ScreenGui.ResetOnSpawn = false
-ScreenGui.Parent = Player:WaitForChild("PlayerGui")
+ScreenGui.Parent = Player:WaitForChild("CoreGui")
 
 local Main = Instance.new("Frame")
 Main.Size = UDim2.fromOffset(300, 250)
@@ -172,6 +177,39 @@ local DestroyCorner = Instance.new("UICorner")
 DestroyCorner.CornerRadius = UDim.new(0, 6)
 DestroyCorner.Parent = DestroyButton
 
+--// Drag Logic
+
+Main.InputBegan:Connect(function(Input)
+	if Input.UserInputType == Enum.UserInputType.MouseButton1 then
+		Dragging = true
+		DragStart = Input.Position
+		StartPosition = Main.Position
+
+		Input.Changed:Connect(function()
+			if Input.UserInputState == Enum.UserInputState.End then
+				Dragging = false
+			end
+		end)
+	end
+end)
+
+UserInputService.InputChanged:Connect(function(Input)
+	if not Dragging then
+		return
+	end
+
+	if Input.UserInputType == Enum.UserInputType.MouseMovement then
+		local Delta = Input.Position - DragStart
+
+		Main.Position = UDim2.new(
+			StartPosition.X.Scale,
+			StartPosition.X.Offset + Delta.X,
+			StartPosition.Y.Scale,
+			StartPosition.Y.Offset + Delta.Y
+		)
+	end
+end)
+
 --// Teleport Logic
 
 TeleportButton.MouseButton1Click:Connect(function()
@@ -189,22 +227,40 @@ TeleportButton.MouseButton1Click:Connect(function()
 	Count = math.floor(Count)
 
 	Running = true
-	TeleportButton.Text = "Teleporting..."
+	TeleportButton.Text = "Running..."
 
 	for i = 1, Count do
+		-- Get the current character
 		Character = Player.Character or Player.CharacterAdded:Wait()
 		HumanoidRootPart = Character:WaitForChild("HumanoidRootPart")
 
+		local Humanoid = Character:WaitForChild("Humanoid")
 		local Position = VotePadPositions[SelectedPad]
 
+		-- Teleport to the vote pad
 		HumanoidRootPart.CFrame = CFrame.new(Position)
 
-		task.wait(0.5)
+		-- Give the teleport a moment to register
+		task.wait(0.2)
+
+		-- Kill the character
+		Humanoid.Health = 0
+
+		-- Don't wait for anything on the final iteration
+		if i < Count then
+			-- Wait until the character actually respawns
+			Character = Player.CharacterAdded:Wait()
+
+			-- Make sure the new character is ready
+			HumanoidRootPart = Character:WaitForChild("HumanoidRootPart")
+			Character:WaitForChild("Humanoid")
+		end
 	end
 
 	TeleportButton.Text = "Teleport"
 	Running = false
 end)
+
 
 --// Destroy GUI
 
