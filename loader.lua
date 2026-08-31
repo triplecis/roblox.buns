@@ -46,7 +46,7 @@ _Tabs = {
 print("Fetching game script...")
 local GamePlaceID = game.PlaceId
 local url = string.format(
-    "https://raw.githubusercontent.com/triplecis/roblox.buns/main/games/%d.lua", 
+    "https://raw.githubusercontent.com/triplecis/roblox.buns/refs/heads/main/games/%d.lua", 
     GamePlaceID
 )
 
