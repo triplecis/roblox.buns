@@ -1,5 +1,7 @@
 --// roblox.buns //--
 
+print("roblox.buns loaded successfully!")
+
 -- // Get Games // --
 
 local GamePlaceID = game.PlaceId
