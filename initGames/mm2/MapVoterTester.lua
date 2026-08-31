@@ -30,7 +30,8 @@ pcall(function()
 end)
 
 pcall(function()
-	local Existing = Player:WaitForChild("PlayerGui"):FindFirstChild("// MM2 Map Voter //")
+	local PlayerGui = Player:WaitForChild("PlayerGui")
+	local Existing = PlayerGui:FindFirstChild("// MM2 Map Voter //")
 
 	if Existing then
 		Existing:Destroy()
@@ -44,11 +45,13 @@ ScreenGui.Name = "// MM2 Map Voter //"
 ScreenGui.ResetOnSpawn = false
 ScreenGui.ZIndexBehavior = Enum.ZIndexBehavior.Sibling
 
---// Try CoreGui, fallback to PlayerGui
+--// Try CoreGui
 
 local CoreGuiSuccess = pcall(function()
 	ScreenGui.Parent = CoreGui
 end)
+
+--// Fallback
 
 if not CoreGuiSuccess or ScreenGui.Parent ~= CoreGui then
 	ScreenGui.Parent = Player:WaitForChild("PlayerGui")
@@ -87,6 +90,19 @@ Title.TextSize = 20
 Title.Font = Enum.Font.GothamBold
 Title.TextXAlignment = Enum.TextXAlignment.Left
 Title.Parent = TitleBar
+
+--// Status
+
+local Status = Instance.new("TextLabel")
+Status.Size = UDim2.new(1, -20, 0, 20)
+Status.Position = UDim2.fromOffset(10, 215)
+Status.BackgroundTransparency = 1
+Status.Text = "Ready"
+Status.TextColor3 = Color3.fromRGB(150, 150, 150)
+Status.TextSize = 12
+Status.Font = Enum.Font.Gotham
+Status.TextXAlignment = Enum.TextXAlignment.Left
+Status.Parent = Main
 
 --// Vote Pad Label
 
@@ -145,6 +161,8 @@ for Name, Position in pairs(Pads) do
 				PadButton.BackgroundColor3 = Color3.fromRGB(45, 45, 45)
 			end
 		end
+
+		Status.Text = "Selected: " .. SelectedPad
 	end)
 end
 
@@ -217,6 +235,18 @@ local DestroyCorner = Instance.new("UICorner")
 DestroyCorner.CornerRadius = UDim.new(0, 6)
 DestroyCorner.Parent = DestroyButton
 
+--// Black Screen
+
+local BlackScreen = Instance.new("Frame")
+BlackScreen.Name = "BlackScreen"
+BlackScreen.Size = UDim2.fromScale(1, 1)
+BlackScreen.Position = UDim2.fromScale(0, 0)
+BlackScreen.BackgroundColor3 = Color3.fromRGB(0, 0, 0)
+BlackScreen.BorderSizePixel = 0
+BlackScreen.Visible = false
+BlackScreen.ZIndex = 999
+BlackScreen.Parent = ScreenGui
+
 --// Dragging
 
 local Dragging = false
@@ -281,9 +311,16 @@ TeleportButton.MouseButton1Click:Connect(function()
 	Count = math.floor(Count)
 
 	Running = true
+
 	TeleportButton.Text = "Running..."
+	TeleportButton.BackgroundColor3 = Color3.fromRGB(100, 100, 100)
+
+	-- Hide the game while the sequence is running
+	BlackScreen.Visible = true
 
 	for i = 1, Count do
+
+		Status.Text = "Teleporting " .. i .. "/" .. Count
 
 		-- Get current character
 
@@ -292,7 +329,7 @@ TeleportButton.MouseButton1Click:Connect(function()
 		local Humanoid = Character:WaitForChild("Humanoid")
 		local HumanoidRootPart = Character:WaitForChild("HumanoidRootPart")
 
-		-- Get selected vote pad
+		-- Get selected pad
 
 		local Position = VotePadPositions[SelectedPad]
 
@@ -300,19 +337,19 @@ TeleportButton.MouseButton1Click:Connect(function()
 			break
 		end
 
-		-- Teleport to vote pad
+		-- Teleport
 
 		HumanoidRootPart.CFrame = CFrame.new(Position)
 
-		-- Allow the teleport to register
+		-- Small delay to allow the position to register
 
-		task.wait(0.25)
+		task.wait(0.1)
 
-		-- Kill player
+		-- Kill
 
 		Humanoid.Health = 0
 
-		-- Wait for respawn before next cycle
+		-- Wait for a NEW character
 
 		if i < Count then
 			repeat
@@ -324,7 +361,14 @@ TeleportButton.MouseButton1Click:Connect(function()
 		end
 	end
 
+	-- Sequence finished
+
+	BlackScreen.Visible = false
+
+	Status.Text = "Finished"
 	TeleportButton.Text = "Teleport"
+	TeleportButton.BackgroundColor3 = Color3.fromRGB(60, 170, 90)
+
 	Running = false
 end)
 
@@ -332,5 +376,8 @@ end)
 
 DestroyButton.MouseButton1Click:Connect(function()
 	Running = false
-	ScreenGui:Destroy()
+
+	if ScreenGui then
+		ScreenGui:Destroy()
+	end
 end)
