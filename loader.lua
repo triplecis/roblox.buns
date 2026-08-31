@@ -41,18 +41,22 @@ _Tabs = {
     --Control = _Window:AddTab('Control'), -- Control Module [ Premium features for controlling other users, may not implement ]
 }
 
---// Get Games //--
+--// Load Modules //--
+loadstring(game:HttpGet("https://raw.githubusercontent.com/triplecis/roblox.buns/refs/heads/main/launch/home.lua"))()
+loadstring(game:HttpGet("https://raw.githubusercontent.com/triplecis/roblox.buns/refs/heads/main/launch/universal.lua"))()
+--// Game module is loaded dynamically based on the game being played, so we don't load it here. //--
+loadstring(game:HttpGet("https://raw.githubusercontent.com/triplecis/roblox.buns/refs/heads/main/launch/scripts.lua"))()
+loadstring(game:HttpGet("https://raw.githubusercontent.com/triplecis/roblox.buns/refs/heads/main/launch/lobby.lua"))()
+loadstring(game:HttpGet("https://raw.githubusercontent.com/triplecis/roblox.buns/refs/heads/main/launch/settings.lua"))()
+--loadstring(game:HttpGet("https://raw.githubusercontent.com/triplecis/roblox.buns/refs/heads/main/launch/control.lua"))()
 
-print("Fetching game script...")
+--// Get Games //--
 local GamePlaceID = game.PlaceId
 local url = string.format(
     "https://raw.githubusercontent.com/triplecis/roblox.buns/refs/heads/main/games/%d.lua?t=%d",
     GamePlaceID,
     os.time()
 )
-
-print("Game Place ID: " .. GamePlaceID)
-print("Fetching game script from URL: " .. url)
 
 local success, response = pcall(function()
     return game:HttpGet(url)
