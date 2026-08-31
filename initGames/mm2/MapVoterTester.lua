@@ -26,7 +26,7 @@ local StartPosition
 --// GUI
 
 local ScreenGui = Instance.new("ScreenGui")
-ScreenGui.Name = "MM2MapVoter"
+ScreenGui.Name = "// MM2 Map Voter //"
 ScreenGui.ResetOnSpawn = false
 ScreenGui.Parent = Player:WaitForChild("CoreGui")
 
