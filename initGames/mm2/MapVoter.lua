@@ -1,4 +1,3 @@
-```lua
 --// MM2 Map Voter //--
 
 --// Services
@@ -299,4 +298,3 @@ Library:OnUnload(function()
 		BlackScreen = nil
 	end
 end)
-```
