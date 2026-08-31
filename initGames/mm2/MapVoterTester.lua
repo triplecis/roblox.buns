@@ -1,4 +1,3 @@
-```lua
 --// MM2 Map Voter //--
 
 local Players = game:GetService("Players")
@@ -335,4 +334,3 @@ DestroyButton.MouseButton1Click:Connect(function()
 	Running = false
 	ScreenGui:Destroy()
 end)
-```
