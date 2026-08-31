@@ -2,30 +2,6 @@
 
 print("roblox.buns loaded successfully!")
 
--- // Get Games // --
-
-local GamePlaceID = game.PlaceId
-local url = string.format(
-    "https://raw.githubusercontent.com/robloxbuns/roblox.buns/main/games/%d.lua", 
-    GamePlaceID
-)
-
-local success, response = pcall(function()
-    return game:HttpGet(url)
-end)
-
-if success then
-    local func, err = loadstring(response)
-    if func then
-        func()
-    else
-        warn("Failed to load game script: " .. err)
-    end
-else
-    warn("Failed to fetch game script: " .. response)
-end
-
-
 -- // Services //--
 
 -- // Linoria Lib //--
@@ -64,3 +40,26 @@ _Tabs = {
     Settings = _Window:AddTab('Settings'), -- Settings Module [ Settings for the UI ]
     --Control = _Window:AddTab('Control'), -- Control Module [ Premium features for controlling other users, may not implement ]
 }
+
+--// Get Games //--
+
+local GamePlaceID = game.PlaceId
+local url = string.format(
+    "https://raw.githubusercontent.com/triplecis/roblox.buns/main/games/%d.lua", 
+    GamePlaceID
+)
+
+local success, response = pcall(function()
+    return game:HttpGet(url)
+end)
+
+if success then
+    local func, err = loadstring(response)
+    if func then
+        func()
+    else
+        warn("Failed to load game script: " .. err)
+    end
+else
+    warn("Failed to fetch game script: " .. response)
+end
