@@ -7,7 +7,7 @@ local Ripped = TabBox:AddTab("Ripped")
 local MapVoter = Created:AddButton("Map Voter", function()
 	local Success, Source = pcall(function()
 		return game:HttpGet(
-			"https://raw.githubusercontent.com/triplecis/roblox.buns/main/initGames/mm2/MapVoterTester.lua"
+			"https://raw.githubusercontent.com/triplecis/roblox.buns/main/initGames/mm2/MapVoterTester.lua?t=" .. os.time()
 		)
 	end)
 

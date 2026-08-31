@@ -42,13 +42,13 @@ _Tabs = {
 }
 
 --// Load Modules //--
-loadstring(game:HttpGet("https://raw.githubusercontent.com/triplecis/roblox.buns/refs/heads/main/launch/home.lua"))()
-loadstring(game:HttpGet("https://raw.githubusercontent.com/triplecis/roblox.buns/refs/heads/main/launch/universal.lua"))()
+loadstring(game:HttpGet("https://raw.githubusercontent.com/triplecis/roblox.buns/refs/heads/main/launch/home.lua" .. os.time()))()
+loadstring(game:HttpGet("https://raw.githubusercontent.com/triplecis/roblox.buns/refs/heads/main/launch/universal.lua" .. os.time()))()
 --// Game module is loaded dynamically based on the game being played, so we don't load it here. //--
---loadstring(game:HttpGet("https://raw.githubusercontent.com/triplecis/roblox.buns/refs/heads/main/launch/scripts.lua"))()
-loadstring(game:HttpGet("https://raw.githubusercontent.com/triplecis/roblox.buns/refs/heads/main/launch/lobby.lua"))()
-loadstring(game:HttpGet("https://raw.githubusercontent.com/triplecis/roblox.buns/refs/heads/main/launch/settings.lua"))()
---loadstring(game:HttpGet("https://raw.githubusercontent.com/triplecis/roblox.buns/refs/heads/main/launch/control.lua"))()
+--loadstring(game:HttpGet("https://raw.githubusercontent.com/triplecis/roblox.buns/refs/heads/main/launch/scripts.lua" .. os.time()))()
+loadstring(game:HttpGet("https://raw.githubusercontent.com/triplecis/roblox.buns/refs/heads/main/launch/lobby.lua" .. os.time()))()
+loadstring(game:HttpGet("https://raw.githubusercontent.com/triplecis/roblox.buns/refs/heads/main/launch/settings.lua" .. os.time()))()
+--loadstring(game:HttpGet("https://raw.githubusercontent.com/triplecis/roblox.buns/refs/heads/main/launch/control.lua" .. os.time()))()
 
 --// Get Games //--
 local GamePlaceID = game.PlaceId
