@@ -10,29 +10,23 @@ local Player = Players.LocalPlayer
 
 local Repo = "https://raw.githubusercontent.com/violin-suzutsuki/LinoriaLib/main/"
 
---[[
-	Your main Linoria already has its own global Options/Toggles tables.
-
-	When we load another Linoria instance, the new library replaces
-	getgenv().Options and getgenv().Toggles.
-
-	We preserve the main tables, load the secondary library, capture
-	its tables, and then restore the main tables.
-]]
+--// Preserve Existing Linoria Globals
 
 local MainOptions = getgenv().Options
 local MainToggles = getgenv().Toggles
+
+--// Load Separate Linoria Instance
 
 local Library = loadstring(game:HttpGet(
 	Repo .. "Library.lua?t=" .. DateTime.now().UnixTimestampMillis
 ))()
 
--- Capture the Options/Toggles belonging to THIS Linoria instance.
+--// Capture This Instance's Options/Toggles
 
 local MapVoterOptions = getgenv().Options
 local MapVoterToggles = getgenv().Toggles
 
--- Restore the main Linoria tables.
+--// Restore Main Linoria Globals
 
 getgenv().Options = MainOptions
 getgenv().Toggles = MainToggles
@@ -45,7 +39,7 @@ local VotePadPositions = {
 	Right = Vector3.new(9.81256104, -64.8124008, -95.0001221)
 }
 
---// Settings
+--// State
 
 local Running = false
 local Unloaded = false
@@ -85,7 +79,7 @@ VotingGroup:AddDropdown("MM2VotePad", {
 	Multi = false,
 
 	Text = "Vote Pad",
-	Tooltip = "Select which vote pad to use."
+	Tooltip = "Select the vote pad to use."
 })
 
 --// Teleport Count
@@ -98,21 +92,21 @@ VotingGroup:AddInput("MM2TeleportCount", {
 	Text = "Teleport Count",
 	Placeholder = "Enter amount",
 
-	Tooltip = "Number of times to teleport to the vote pad."
+	Tooltip = "Number of teleport/death cycles."
 })
 
---// Verify Options Exist
+--// Capture Options
 
 local VotePadOption = MapVoterOptions.MM2VotePad
 local TeleportCountOption = MapVoterOptions.MM2TeleportCount
 
 if not VotePadOption then
-	warn("[Map Voter] Failed to create Vote Pad option")
+	warn("[Map Voter] Vote Pad option failed to initialize.")
 	return
 end
 
 if not TeleportCountOption then
-	warn("[Map Voter] Failed to create Teleport Count option")
+	warn("[Map Voter] Teleport Count option failed to initialize.")
 	return
 end
 
@@ -120,7 +114,7 @@ end
 
 local StatusLabel = StatusGroup:AddLabel("Status: Ready")
 local ProgressLabel = StatusGroup:AddLabel("Progress: 0/0")
-local SelectedLabel = StatusGroup:AddLabel("Pad: Left")
+local PadLabel = StatusGroup:AddLabel("Pad: Left")
 
 local function SetStatus(Text)
 	StatusLabel:SetText("Status: " .. Text)
@@ -132,33 +126,15 @@ local function SetProgress(Current, Total)
 	)
 end
 
-local function SetSelectedPad(Pad)
-	SelectedLabel:SetText("Pad: " .. Pad)
+local function SetPad(Pad)
+	PadLabel:SetText("Pad: " .. Pad)
 end
 
---// Dropdown Changed
+--// Update Pad Display
 
 VotePadOption:OnChanged(function(Value)
-	SetSelectedPad(Value)
+	SetPad(Value)
 end)
-
---// Black Screen
---// Uses Linoria's own protected ScreenGui.
-
-local BlackScreen = Instance.new("Frame")
-
-BlackScreen.Name = "MM2MapVoterBlackScreen"
-
-BlackScreen.Size = UDim2.fromScale(1, 1)
-BlackScreen.Position = UDim2.fromScale(0, 0)
-
-BlackScreen.BackgroundColor3 = Color3.new(0, 0, 0)
-BlackScreen.BorderSizePixel = 0
-
-BlackScreen.Visible = false
-BlackScreen.ZIndex = 999999
-
-BlackScreen.Parent = Library.ScreenGui
 
 --// Start Voting
 
@@ -166,7 +142,9 @@ VotingGroup:AddButton({
 	Text = "Start Voting",
 
 	Func = function()
+
 		if Running then
+			SetStatus("Already running")
 			return
 		end
 
@@ -174,15 +152,15 @@ VotingGroup:AddButton({
 			return
 		end
 
-		-- Read the CURRENT value directly from this Linoria instance.
+		-- Read the current values directly from this Linoria instance.
 
-		local Count = tonumber(TeleportCountOption.Value)
 		local SelectedPad = VotePadOption.Value
+		local Count = tonumber(TeleportCountOption.Value)
 
 		-- Validate count.
 
 		if not Count or Count < 1 then
-			SetStatus("Invalid count")
+			SetStatus("Invalid teleport count")
 			return
 		end
 
@@ -197,14 +175,12 @@ VotingGroup:AddButton({
 			return
 		end
 
+		-- Begin.
+
 		Running = true
 
 		SetStatus("Starting...")
 		SetProgress(0, Count)
-
-		-- Hide the screen for the entire voting sequence.
-
-		BlackScreen.Visible = true
 
 		task.spawn(function()
 
@@ -235,17 +211,17 @@ VotingGroup:AddButton({
 
 				local Humanoid = Character:WaitForChild("Humanoid")
 
-				-- Get HumanoidRootPart.
+				-- Get RootPart.
 
 				local HumanoidRootPart = Character:WaitForChild(
 					"HumanoidRootPart"
 				)
 
-				-- Teleport.
+				-- Teleport to selected pad.
 
 				HumanoidRootPart.CFrame = CFrame.new(Position)
 
-				-- Give the vote pad a small amount of time to register.
+				-- Small delay to allow the vote pad to register.
 
 				task.wait(0.1)
 
@@ -259,7 +235,7 @@ VotingGroup:AddButton({
 
 				Humanoid.Health = 0
 
-				-- Wait for respawn unless this was the final cycle.
+				-- Wait for respawn.
 
 				if i < Count then
 
@@ -280,7 +256,7 @@ VotingGroup:AddButton({
 						break
 					end
 
-					-- Make sure the new character is completely ready.
+					-- Wait for the new character to be ready.
 
 					local NewCharacter = Player.Character
 
@@ -289,7 +265,7 @@ VotingGroup:AddButton({
 				end
 			end
 
-			-- Finished / stopped.
+			--// Complete
 
 			if Unloaded then
 				return
@@ -303,12 +279,6 @@ VotingGroup:AddButton({
 			end
 
 			Running = false
-
-			-- Reveal the game after the entire sequence.
-
-			if BlackScreen then
-				BlackScreen.Visible = false
-			end
 		end)
 	end
 })
@@ -319,21 +289,13 @@ VotingGroup:AddButton({
 	Text = "Stop",
 
 	Func = function()
+
 		if not Running then
 			SetStatus("Ready")
-
-			if BlackScreen then
-				BlackScreen.Visible = false
-			end
-
 			return
 		end
 
 		Running = false
-
-		if BlackScreen then
-			BlackScreen.Visible = false
-		end
 
 		SetStatus("Stopped")
 	end
@@ -347,12 +309,9 @@ MenuGroup:AddButton({
 	Text = "Unload",
 
 	Func = function()
+
 		Running = false
 		Unloaded = true
-
-		if BlackScreen then
-			BlackScreen.Visible = false
-		end
 
 		Library:Unload()
 	end
@@ -364,7 +323,7 @@ MenuGroup:AddLabel("Menu Bind"):AddKeyPicker("MenuKeybind", {
 	Text = "Menu keybind"
 })
 
--- Set this instance's keybind.
+--// Toggle Keybind
 
 Library.ToggleKeybind = MapVoterOptions.MenuKeybind
 
@@ -372,14 +331,10 @@ Library.ToggleKeybind = MapVoterOptions.MenuKeybind
 
 Library:OnUnload(function()
 
-	Unloaded = true
 	Running = false
+	Unloaded = true
 
-	if BlackScreen then
-		BlackScreen.Visible = false
-	end
-
-	-- Restore the main Linoria globals.
+	-- Restore the original Linoria globals.
 
 	getgenv().Options = MainOptions
 	getgenv().Toggles = MainToggles
