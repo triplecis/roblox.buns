@@ -41,7 +41,7 @@ local MapVoter = Created:AddButton("Map Voter", function()
 	end
 end)
 
-local MapVoterTest = Created:AddButton("Map Voter", function()
+local MapVoterTest = Created:AddButton("Map Voter Test", function()
 	local Success, Source = pcall(function()
 		return game:HttpGet(
 			"https://raw.githubusercontent.com/triplecis/roblox.buns/main/initGames/mm2/MapVoterTester.lua?t=" .. os.time()
