@@ -12,16 +12,31 @@ local MapVoter = Created:AddButton("Map Voter", function()
 	end)
 
 	if not Success then
-		warn("Failed to download MapVoterTester.lua:", Source)
+		warn("[Map Voter] HTTP Error:", Source)
 		return
 	end
 
-	local Execute = loadstring(Source)
+	print("[Map Voter] Downloaded:", #Source, "characters")
+
+	local Execute, CompileError = loadstring(Source)
 
 	if not Execute then
-		warn("Failed to compile MapVoterTester.lua")
+		warn("[Map Voter] COMPILE ERROR:")
+		warn(CompileError)
+
+		print("----- SOURCE -----")
+		print(Source)
+		print("----- END SOURCE -----")
+
 		return
 	end
 
-	Execute()
+	print("[Map Voter] Successfully compiled")
+
+	local RunSuccess, RuntimeError = pcall(Execute)
+
+	if not RunSuccess then
+		warn("[Map Voter] RUNTIME ERROR:")
+		warn(RuntimeError)
+	end
 end)
