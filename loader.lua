@@ -46,8 +46,9 @@ _Tabs = {
 print("Fetching game script...")
 local GamePlaceID = game.PlaceId
 local url = string.format(
-    "https://raw.githubusercontent.com/triplecis/roblox.buns/refs/heads/main/games/%d.lua", 
-    GamePlaceID
+    "https://raw.githubusercontent.com/triplecis/roblox.buns/refs/heads/main/games/%d.lua?t=%d",
+    GamePlaceID,
+    os.time()
 )
 
 print("Game Place ID: " .. GamePlaceID)
@@ -56,14 +57,29 @@ print("Fetching game script from URL: " .. url)
 local success, response = pcall(function()
     return game:HttpGet(url)
 end)
+if not success then
+    warn("Failed to fetch game script: " .. tostring(response))
+    return
+end
 
-if success then
-    local func, err = loadstring(response)
-    if func then
-        func()
-    else
-        warn("Failed to load game script: " .. err)
-    end
+if not response or response == "" then
+    warn("GitHub returned an empty response.")
+    return
+end
+
+local func, err = loadstring(response)
+
+if not func then
+    warn("Failed to compile game script:")
+    warn(err)
+    return
+end
+
+local ran, runtimeError = pcall(func)
+
+if not ran then
+    warn("Game script encountered an error:")
+    warn(runtimeError)
 else
-    warn("Failed to fetch game script: " .. response)
+    print("Game script loaded successfully!")
 end
