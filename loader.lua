@@ -43,11 +43,15 @@ _Tabs = {
 
 --// Get Games //--
 
+print("Fetching game script...")
 local GamePlaceID = game.PlaceId
 local url = string.format(
     "https://raw.githubusercontent.com/triplecis/roblox.buns/main/games/%d.lua", 
     GamePlaceID
 )
+
+print("Game Place ID: " .. GamePlaceID)
+print("Fetching game script from URL: " .. url)
 
 local success, response = pcall(function()
     return game:HttpGet(url)
