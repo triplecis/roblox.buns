@@ -95,10 +95,24 @@ VotingGroup:AddInput("MM2TeleportCount", {
 	Tooltip = "Number of teleport/death cycles."
 })
 
+--// Vote Wait
+
+VotingGroup:AddInput("MM2VoteWait", {
+	Default = "0.25",
+	Numeric = true,
+	Finished = false,
+
+	Text = "Vote Wait",
+	Placeholder = "Seconds",
+
+	Tooltip = "How long to stay on the vote pad before dying."
+})
+
 --// Capture Options
 
 local VotePadOption = MapVoterOptions.MM2VotePad
 local TeleportCountOption = MapVoterOptions.MM2TeleportCount
+local VoteWaitOption = MapVoterOptions.MM2VoteWait
 
 if not VotePadOption then
 	warn("[Map Voter] Vote Pad option failed to initialize.")
@@ -107,6 +121,11 @@ end
 
 if not TeleportCountOption then
 	warn("[Map Voter] Teleport Count option failed to initialize.")
+	return
+end
+
+if not VoteWaitOption then
+	warn("[Map Voter] Vote Wait option failed to initialize.")
 	return
 end
 
@@ -152,10 +171,11 @@ VotingGroup:AddButton({
 			return
 		end
 
-		-- Read the current values directly from this Linoria instance.
+		-- Read current values.
 
 		local SelectedPad = VotePadOption.Value
 		local Count = tonumber(TeleportCountOption.Value)
+		local VoteWait = tonumber(VoteWaitOption.Value)
 
 		-- Validate count.
 
@@ -166,6 +186,13 @@ VotingGroup:AddButton({
 
 		Count = math.floor(Count)
 
+		-- Validate wait.
+
+		if not VoteWait or VoteWait < 0 then
+			SetStatus("Invalid vote wait")
+			return
+		end
+
 		-- Validate pad.
 
 		local Position = VotePadPositions[SelectedPad]
@@ -174,8 +201,6 @@ VotingGroup:AddButton({
 			SetStatus("Invalid vote pad")
 			return
 		end
-
-		-- Begin.
 
 		Running = true
 
@@ -221,9 +246,13 @@ VotingGroup:AddButton({
 
 				HumanoidRootPart.CFrame = CFrame.new(Position)
 
-				-- Small delay to allow the vote pad to register.
+				-- Wait for the vote pad to register the player.
 
-				task.wait(0.1)
+				SetStatus(
+					("Voting... %.2fs"):format(VoteWait)
+				)
+
+				task.wait(VoteWait)
 
 				if not Running or Unloaded then
 					break
@@ -256,7 +285,7 @@ VotingGroup:AddButton({
 						break
 					end
 
-					-- Wait for the new character to be ready.
+					-- Wait for the new character.
 
 					local NewCharacter = Player.Character
 
@@ -334,7 +363,7 @@ Library:OnUnload(function()
 	Running = false
 	Unloaded = true
 
-	-- Restore the original Linoria globals.
+	-- Restore main Linoria globals.
 
 	getgenv().Options = MainOptions
 	getgenv().Toggles = MainToggles
