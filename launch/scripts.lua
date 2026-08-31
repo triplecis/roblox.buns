@@ -10,6 +10,5 @@ print("Loading Scripts module...")
 print("Fetching all game scripts...")
 local Games = _Tabs.Scripts:AddLeftTabbox("Games")
 
-Games:AddTab("Undetected")
-Games:AddTab("Detected")
-
+local Undetected = Games:AddTab("Undetected")
+local Detected = Games:AddTab("Detected")

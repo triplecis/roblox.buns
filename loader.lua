@@ -35,7 +35,7 @@ _Tabs = {
     Home = _Window:AddTab('Home'), -- Home Module
     Universal = _Window:AddTab('Universal'), -- Universal Module
     Game = _Window:AddTab('Game'), -- Game Module [ Detect the Game and load the script for it ]
-    Scripts = _Window:AddTab('Scripts'), -- Scripts Module [ Shows games available to load scripts for ]
+    --Scripts = _Window:AddTab('Scripts'), -- Scripts Module [ Shows games available to load scripts for ]
     Lobby = _Window:AddTab('Lobby'), -- Lobby Module [ Shows players in lobby ]
     Settings = _Window:AddTab('Settings'), -- Settings Module [ Settings for the UI ]
     --Control = _Window:AddTab('Control'), -- Control Module [ Premium features for controlling other users, may not implement ]
@@ -45,7 +45,7 @@ _Tabs = {
 loadstring(game:HttpGet("https://raw.githubusercontent.com/triplecis/roblox.buns/refs/heads/main/launch/home.lua"))()
 loadstring(game:HttpGet("https://raw.githubusercontent.com/triplecis/roblox.buns/refs/heads/main/launch/universal.lua"))()
 --// Game module is loaded dynamically based on the game being played, so we don't load it here. //--
-loadstring(game:HttpGet("https://raw.githubusercontent.com/triplecis/roblox.buns/refs/heads/main/launch/scripts.lua"))()
+--loadstring(game:HttpGet("https://raw.githubusercontent.com/triplecis/roblox.buns/refs/heads/main/launch/scripts.lua"))()
 loadstring(game:HttpGet("https://raw.githubusercontent.com/triplecis/roblox.buns/refs/heads/main/launch/lobby.lua"))()
 loadstring(game:HttpGet("https://raw.githubusercontent.com/triplecis/roblox.buns/refs/heads/main/launch/settings.lua"))()
 --loadstring(game:HttpGet("https://raw.githubusercontent.com/triplecis/roblox.buns/refs/heads/main/launch/control.lua"))()

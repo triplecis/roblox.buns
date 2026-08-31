@@ -51,7 +51,7 @@ local function FindPlotUsingDisplayNames()
 end
 
 local PlotGroup = _Tabs.Game:AddLeftGroupbox("Steal an egg")
-PlotGroup:AddLabel("Steal an egg from another player's plot") 
+PlotGroup:AddLabel("Plot: " .. PlayerPlot.Name) 
 
 FindPlotUsingImages()
 FindPlotUsingDisplayNames()
