@@ -10,6 +10,8 @@ local GameDescription = MarketplaceService:GetProductInfo(PlaceId).Description
 --// MentalityUI Loader //--
 
 local Library = loadstring(game:HttpGet("https://raw.githubusercontent.com/samuraa1/MentalityUI/main/Library.lua"))()
+local SaveManager = loadstring(game:HttpGet("https://raw.githubusercontent.com/samuraa1/MentalityUI/main/SaveManager.lua"))()
+local ThemeManager = loadstring(game:HttpGet("https://raw.githubusercontent.com/samuraa1/MentalityUI/main/ThemeManager.lua"))()
 
 local Window = Library:Window({
     Name = "roblox.buns",
@@ -18,8 +20,6 @@ local Window = Library:Window({
 })
 
 local KeybindList = Library:KeybindList("Keybinds")
-
-local Category = Window:Category("Main")
 
 local Dashboard = Window:DashboardPage({
     Name = "Dashboard",
@@ -32,32 +32,22 @@ local Dashboard = Window:DashboardPage({
     GameDescription = GameDescription,
     Links = {
         {
-            Icon = "copy",
-            Tooltip = "Copy PlaceId to clipboard",
-            callback = function()
+            Icon = "copy", Tooltip = "Copy PlaceId to clipboard", callback = function()
                 pcall(function()
                     setclipboard(PlaceId)
                 end)
                 Library:Notification({
-                    Title = "Copied",
-                    Description = "Clipboard updated.",
-                    Duration = 2,
-                    Icon = "97594400820219",
+                    Title = "Copied", Description = "Clipboard updated.", Duration = 2, Icon = "97594400820219",
                 })
             end,
         },
         {
-            Icon = "group",
-            Tooltip = "Copy Discord to clipboard",
-            Callback = function()
+            Icon = "group", Tooltip = "Copy Discord to clipboard", Callback = function()
                 pcall(function()
                     setclipboard("discord.gg/")
                 end)
                 Library:Notification({
-                    Title = "Copied",
-                    Description = "Clipboard updated.",
-                    Duration = 2,
-                    Icon = "97594400820219",
+                    Title = "Copied", Description = "Clipboard updated.", Duration = 2, Icon = "97594400820219",
                 })
             end,
         },
@@ -65,44 +55,50 @@ local Dashboard = Window:DashboardPage({
     },
     Stats = {
         {
-            Name = "TIME",
-            Icon = "clock",
-            GetValue = function()
+            Name = "TIME", Icon = "clock", GetValue = function()
                 return os.date("%H:%M:%S")
             end,
         },
         {
-            Name = "GAMETIME",
-            Icon = "clock",
-            GetValue = function()
+            Name = "GAMETIME", Icon = "clock", GetValue = function()
                 return tostring(math.floor(workspace.DistributedGameTime)) .. "s"
             end,
         },
     },
-    Credits = {
-        { Name = "samet", Role = "Library" },
+    QuickAccess = {
+        {
+            Name = "Settings", Icon = "settings", Callback = function()
+                Window:OpenPage("Settings")
+            end,
+        },
     },
-    QuickAccess = {},
 })
 
-Dashboard:AddCard({
-    Name = "MAIN",
-    Description = "Toggles & sliders.",
-    Icon = "gamepad-2",
-    Tab = MainPage,
-})
-
-local MainPage = Window:Page({
-    Name = "Main",
-    Icon = "gamepad-2"
-})
+--[[Dashboard:AddCard({
+    Name = "MAIN", Description = "Toggles & sliders.", Icon = "gamepad-2", Tab = MainPage,
+})]]--
 
 local TabDivider0 = Window:TabDivider()
-local GameCategory = Window:Category("Game")
 
-local GamePage = Window:Page({
-    Name = "Game",
-    Icon = "gamepad-2"
+-- // Main Category //--
+
+local MainCategory = Window:Category("Main")
+
+local MainPage = Window:Page({
+    Name = "Main", Icon = "gamepad-2"
 })
 
-loadstring(game:HttpGet("https://raw.githubusercontent.com/triplecis/roblox.buns/main/Settings.lua"))()
+--// Game Category //--
+local GameCategory = Window:Category("Game")
+
+local UniversalPage = Window:Page({
+    Name = "Universal", Icon = "gamepad-2"
+})
+
+local GamePage = Window:Page({
+    Name = GameName, Icon = "gamepad-2"
+})
+
+local TabDivider1 = Window:TabDivider()
+
+loadstring(game:HttpGet("https://raw.githubusercontent.com/triplecis/roblox.buns/refs/heads/main/settings.lua"))()
