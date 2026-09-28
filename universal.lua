@@ -23,13 +23,13 @@ return function(Context)
     local VisualSection = UniversalPage:Section({
         Name = "Visuals",
         Icon = "eye",
-        Side = 3,
+        Side = 1,
     })
 
     local CameraSection = UniversalPage:Section({
         Name = "Camera",
         Icon = "camera",
-        Side = 4,
+        Side = 2,
     })
 
     PlayerSection:Toggle({
