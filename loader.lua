@@ -1,6 +1,7 @@
-local BaseUrl = "https://raw.githubusercontent.com/"
-local LibraryRepo = "samuraa1/MentalityUI/refs/heads/main/"
-local MyRepo = "triplecis/roblox.buns/refs/heads/main/"
+local BaseUrl = "https://raw.githubusercontent.com/"; local LibraryRepo = "samuraa1/MentalityUI/refs/heads/main/"; local MyRepo = "triplecis/roblox.buns/refs/heads/main/"
+local FullLibUrl = BaseUrl .. LibraryRepo; local MyFullUrl = BaseUrl .. MyRepo
+
+local IconAsset = "89380854415542"
 
 -- // IDs // --
 local PlaceId = game.PlaceId
@@ -18,15 +19,15 @@ local GameDescription = MarketplaceService:GetProductInfo(PlaceId).Description
 
 --// MentalityUI Loader //--
 
-local Library = loadstring(game:HttpGet(BaseUrl .. LibraryRepo .. "Library.lua"))()
-local SaveManager = loadstring(game:HttpGet(BaseUrl .. LibraryRepo .. "SaveManager.lua"))()
-local ThemeManager = loadstring(game:HttpGet(BaseUrl .. LibraryRepo .. "ThemeManager.lua"))()
+local Library = loadstring(game:HttpGet(FullLibUrl .. "Library.lua"))()
+local SaveManager = loadstring(game:HttpGet(FullLibUrl .. "SaveManager.lua"))()
+local ThemeManager = loadstring(game:HttpGet(FullLibUrl .. "ThemeManager.lua"))()
 
 Library:Notification({
     Title = "roblox.buns", 
     Description = "Loader loading.", 
     Duration = 3, 
-    Icon = "97594400820219",
+    Icon = IconAsset,
 })
 
 local Window = Library:Window({
@@ -50,10 +51,11 @@ local Dashboard = Window:DashboardPage({
         {
             Icon = "copy", Tooltip = "Copy Discord to clipboard", Callback = function()
                 pcall(function()
-                    setclipboard("discord.gg/")
+                    setclipboard("https://discord.gg/ys78VPnnJQ")
+                    
                 end)
                 Library:Notification({
-                    Title = "Copied", Description = "Clipboard updated.", Duration = 2, Icon = "97594400820219",
+                    Title = "Copied", Description = "Clipboard updated.", Duration = 2, Icon = "89380854415542",
                 })
             end,
         },
@@ -107,7 +109,7 @@ local TabDivider1 = Window:TabDivider()
 
 local Context = {
     Library = Library, Window = Window, SaveManager = SaveManager, ThemeManager = ThemeManager,
-
+    IconAsset = IconAsset
     Player = Player,
 
     PlaceId = PlaceId, GameId = GameId, JobId = JobId,
@@ -150,7 +152,7 @@ local function LoadScript(Path)
 
     if not Success then
         Library:Notification({
-            Title = "Error", Description = "Failed to load " .. Path .. ": " .. tostring(Result), Duration = 5, Icon = "97594400820219",
+            Title = "Error", Description = "Failed to load " .. Path .. ": " .. tostring(Result), Duration = 5, Icon = IconAsset,
         })
 
         return nil
@@ -195,6 +197,9 @@ if GameData then
     end
 else
     Library:Notification({
-        Title = "Unsupported", Description = "No game module found for GameId: " .. tostring(GameId), Duration = 5, Icon = "97594400820219",
+        Title = "Unsupported", 
+        Description = "No game module found for GameId: " .. tostring(GameId), 
+        Duration = 5, 
+        Icon = IconAsset,
     })
 end

@@ -1,13 +1,58 @@
 return function(Context)
     local Player = Context.Player
+    local Character = Player.Character or Player.CharacterAdded:Wait()
+    local Humanoid = Character:WaitForChild("Humanoid")
 
     local Library = Context.Library
     local Window = Context.Window
     local UniversalPage = Context.Pages.Universal
 
 
-    local OriginalWalkspeed = Player.Character.Humanoid.WalkSpeed
-    local OriginalJumpPower = Player.Character.Humanoid.JumpPower
+   local BaseWalkSpeed = Humanoid.WalkSpeed or 16; local BaseJumpPower = Humanoid.JumpPower or 50 ; local BaseJumpHeight = Humanoid.JumpHeight or 7.2
+    local ChangingWalkSpeed = false; local ChangingJump = false
+
+    --// Functions //--
+
+    local function ApplyWalkSpeed()
+        if not WalkSpeedToggle or WalkSpeedToggle.State then
+            return
+        end
+
+        local Multiplier = 1 + (WalkSpeedSlider.Value / 100)
+
+        ChangingWalkSpeed = true
+        Humanoid.WalkSpeed = (BaseWalkSpeed * Multiplier)
+        ChangingWalkSpeed = false
+    end
+
+    Humanoid:GetPropertyChangedSignal("WalkSpeed"):Connect(function()
+        if ChangingWalkSpeed then
+            return
+        end
+
+        BaseWalkSpeed = Humanoid.WalkSpeed
+
+        if WalkSpeedToggle and WalkSpeedToggle.State then
+            ApplyWalkSpeed()
+        end
+    end)
+
+    local function ApplyJump()
+        --//apply later
+    end
+
+    Humanoid:GetPropertyChangedSignal("JumpPower" or "JumpHeight"):Connect(function()
+        if ChangingJump then
+            return
+        end
+
+        BaseJumpPower = Humanoid.JumpPower
+        BaseJumpHeight = Humanoid.JumpHeight
+
+        if Jump and WalkSpeedToggle.State then
+            ApplyWalkSpeed()
+        end
+    end)
     -- // Sections // --
     
     local PlayerSection = UniversalPage:Section({
@@ -20,37 +65,94 @@ return function(Context)
         Name = "Camera", Icon = "camera", Side = 2,
     })
 
-    local WalkspeedToggle = PlayerSection:Toggle({
-        Name = "Walkspeed Toggle", Flag = "WalkspeedToggle", Default = false, Tooltip = "Toggles walkspeed modification", Callback = function(State)
+    local WalkSpeedToggle = PlayerSection:Toggle({
+        Name = "WalkSpeed Toggle", 
+        Flag = "WalkSpeedToggle", 
+        Default = false, 
+        Tooltip = "Toggles WalkSpeed modification", 
+        Callback = function(State)
             if State then
-                Player.Character.Humanoid.WalkSpeed = WalkspeedSlider.Value
+                BaseWalkSpeed = Humanoid.WalkSpeed
+                ApplyWalkSpeed()
             else
-                Player.Character.Humanoid.WalkSpeed = OriginalWalkspeed
+                ChangingWalkSpeed = true
+                Humanoid.WalkSpeed = BaseWalkSpeed
+                ChangingWalkSpeed = false
             end
         end,
-    }); local WalkspeedSub = WalkspeedToggle:Settings(260); local WalkspeedSlider = WalkspeedSub:Slider({
-        Name = "Speed", Flag = "WalkspeedSlider", Default = 16, Min = 10, Max = 500, Increment = 2, Suffix = " WalkSpeed", Callback = function(Value)
-            if WalkspeedToggle.Value then
-                Player.Character.Humanoid.WalkSpeed = Value
+    }); local WalkSpeedSub = WalkSpeedToggle:Settings(260); local WalkSpeedSlider = WalkSpeedSub:Slider({
+        Name = "Speed", 
+        Flag = "WalkSpeedSlider", 
+        Default = 16, 
+        Min = 10, 
+        Max = 500, 
+        Increment = 2, 
+        Suffix = " %",
+        Callback = function(Value)
+            if WalkSpeedToggle.State then
+                local Multiplier = 1 + (WalkSpeedSlider.Value / WalkSpeedSlider.Max)
+                Humanoid.WalkSpeed = (Humanoid.WalkSpeed * Multiplier)
             end
         end,
-    }); local JumpPowerToggle = PlayerSection:Toggle({
-        Name = "Jump Power Toggle", Flag = "JumpPowerToggle", Default = false, Tooltip = "Toggles jump power modification", Callback = function(State)
+    }); 
+
+    if Humanoid.UseJumpPower == true then
+        local JumpPowerToggle = PlayerSection:Toggle({
+            Name = "Jump Power Toggle", 
+            Flag = "JumpPowerToggle", 
+            Default = false, 
+            Tooltip = "Toggles Jump Power modification", Callback = function(State)
+
             if State then
-                Player.Character.Humanoid.JumpPower = JumpPowerSlider.Value
+                Humanoid.JumpPower = JumpPowerSlider.Value
+
             else
-                Player.Character.Humanoid.JumpPower = OriginalJumpPower
-            end
-        end,
-    }); local JumpPowerSub = JumpPowerToggle:Settings(260); local JumpPowerSlider = JumpPowerSub:Slider({
-        Name = "Jump", Flag = "JumpPowerSlider", Default = 50, Min = 10, Max = 200, Increment = 2, Suffix = " JumpPower", Callback = function(Value)
-            if JumpPowerToggle.Value then
-                Player.Character.Humanoid.JumpPower = Value
-            end
-        end,
-    })
+                Humanoid.JumpPower = BaseJumpPower
+
+            end; end,}); 
+
+        local JumpPowerSub = JumpPowerToggle:Settings(260)
+        local JumpPowerSlider = JumpPowerSub:Slider({
+            Name = "Jump", Flag = "JumpPowerSlider", Default = 50, Min = 10, Max = 200, Increment = 2, Suffix = " JumpPower", Callback = function(Value)
+                if JumpPowerToggle.State then
+                    Humanoid.JumpPower = Value
+                end
+            end,
+        })
+    else
+        local JumpHeightToggle = PlayerSection:Toggle({
+            Name = "JumpHeight Toggle", 
+            Flag = "JumpHeightToggle", 
+            Default = false, 
+            Tooltip = "Toggles Jump Height modification", Callback = function(State)
+
+            if State then
+                Humanoid.JumpHeight = JumpHeightSlider.Value
+
+            else
+                Humanoid.JumpHeight = BaseJumpHeight
+            end; end,});
+        local JumpHeightSub = JumpHeightToggle:Settings(260)
+        local JumpHeightSlider = JumpHeightSub:Slider({
+            Name = "Jump", 
+            Flag = "JumpHeightSlider", 
+            Default = 50, 
+            Min = 10, 
+            Max = 200, 
+            Increment = 2, 
+            Suffix = " %", Callback = function(Value)
+                if JumpHeightToggle.State then
+                    Humanoid.JumpHeight = Value
+                end
+            end,
+        })
+    
+    
 
     Library:Notification({
-        Title = "Universal", Description = "Universal page loaded.", Duration = 2, Icon = "97594400820219",
+        Title = "Universal", 
+        Description = "Universal page loaded.", 
+        Duration = 2, 
+        Icon = "97594400820219",
     })
 end
