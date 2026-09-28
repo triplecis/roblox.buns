@@ -28,13 +28,24 @@ return function(Context)
                 Player.Character.Humanoid.WalkSpeed = OriginalWalkspeed
             end
         end,
-    })
-
-    local WalkspeedSub = WalkspeedToggle:Settings(260)
-    local WalkspeedSlider = WalkspeedSub:Slider({
+    }); local WalkspeedSub = WalkspeedToggle:Settings(260); local WalkspeedSlider = WalkspeedSub:Slider({
         Name = "Speed", Flag = "WalkspeedSlider", Default = 16, Min = 10, Max = 500, Increment = 2, Suffix = " WalkSpeed", Callback = function(Value)
             if WalkspeedToggle.Value then
                 Player.Character.Humanoid.WalkSpeed = Value
+            end
+        end,
+    }); local JumpPowerToggle = PlayerSection:Toggle({
+        Name = "Jump Power Toggle", Flag = "JumpPowerToggle", Default = false, Tooltip = "Toggles jump power modification", Callback = function(State)
+            if State then
+                Player.Character.Humanoid.JumpPower = JumpPowerSlider.Value
+            else
+                Player.Character.Humanoid.JumpPower = OriginalJumpPower
+            end
+        end,
+    }); local JumpPowerSub = JumpPowerToggle:Settings(260); local JumpPowerSlider = JumpPowerSub:Slider({
+        Name = "Jump", Flag = "JumpPowerSlider", Default = 50, Min = 10, Max = 200, Increment = 2, Suffix = " JumpPower", Callback = function(Value)
+            if JumpPowerToggle.Value then
+                Player.Character.Humanoid.JumpPower = Value
             end
         end,
     })
