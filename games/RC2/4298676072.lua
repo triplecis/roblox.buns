@@ -7,10 +7,14 @@ return function(Context)
 
     -- // Sections // --
 
-    local RefineryCaves2Section = GamePage:Section({
-        Name = "Refinery Caves 2",
-        Icon = "gamepad-2",
-        Side = 1,
+    local Section0 = GamePage:Section({
+        Name = "Resources ESP", Icon = "gamepad-2", Side = 1,
+    }); local Section1 = GamePage:Section({
+        Name = "Mining", Icon = "gamepad-2", Side = 2,
+    }); local Section2 = GamePage:Section({
+        Name = "Logging", Icon = "gamepad-2", Side = 1,
+    }); local Section3 = GamePage:Section({
+        Name = "Autofarm", Icon = "hammer", Side = 2,
     })
 
     Library:Notification({

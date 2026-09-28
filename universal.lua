@@ -1,50 +1,39 @@
 return function(Context)
-
     local Player = Context.Player
 
     local Library = Context.Library
     local Window = Context.Window
     local UniversalPage = Context.Pages.Universal
 
+
+    local OriginalWalkspeed = Player.Character.Humanoid.WalkSpeed
+    local OriginalJumpPower = Player.Character.Humanoid.JumpPower
     -- // Sections // --
     
     local PlayerSection = UniversalPage:Section({
-        Name = "Player",
-        Icon = "user",
-        Side = 1,
+        Name = "Player", Icon = "user", Side = 1,
+    }); local MovementSection = UniversalPage:Section({
+        Name = "Movement", Icon = "zap", Side = 2,
+    }); local VisualSection = UniversalPage:Section({
+        Name = "Visuals", Icon = "eye", Side = 1,
+    }); local CameraSection = UniversalPage:Section({
+        Name = "Camera", Icon = "camera", Side = 2,
     })
 
-    local MovementSection = UniversalPage:Section({
-        Name = "Movement",
-        Icon = "zap",
-        Side = 2,
-    })
-
-    local VisualSection = UniversalPage:Section({
-        Name = "Visuals",
-        Icon = "eye",
-        Side = 1,
-    })
-
-    local CameraSection = UniversalPage:Section({
-        Name = "Camera",
-        Icon = "camera",
-        Side = 2,
-    })
-
-    PlayerSection:Toggle({
-        Name = "Toggle Speed", Flag = "ToggleSpeed", Default = false, Callback = function(State)
+    local WalkspeedToggle = PlayerSection:Toggle({
+        Name = "Walkspeed Toggle", Flag = "WalkspeedToggle", Default = false, Tooltip = "Toggles walkspeed modification", Callback = function(State)
             if State then
-                Player.Character.Humanoid.WalkSpeed = SpeedToggle.Value
+                Player.Character.Humanoid.WalkSpeed = WalkspeedSlider.Value
             else
-                Player.Character.Humanoid.WalkSpeed = SpeedToggle.Value
+                Player.Character.Humanoid.WalkSpeed = OriginalWalkspeed
             end
         end,
     })
 
-    PlayerSection:Slider({
-        Name = "Speed", Flag = "SpeedToggle", Default = 16, Min = 16, Max = 100, Increment = 1, Suffix = "WalkSpeed", Callback = function(Value)
-            if Player.Character.Humanoid.WalkSpeed ~= Value then
+    local WalkspeedSub = WalkspeedToggle:Settings(260)
+    local WalkspeedSlider = WalkspeedSub:Slider({
+        Name = "Speed", Flag = "WalkspeedSlider", Default = 16, Min = 10, Max = 500, Increment = 2, Suffix = " WalkSpeed", Callback = function(Value)
+            if WalkspeedToggle.Value then
                 Player.Character.Humanoid.WalkSpeed = Value
             end
         end,
