@@ -1,8 +1,8 @@
 local BaseUrl = "https://raw.githubusercontent.com/" 
 local LibraryRepo = "samuraa1/MentalityUI/refs/heads/main/" 
 local MyRepo = "triplecis/roblox.buns/refs/heads/main/"
-local FullLibUrl = (BaseUrl .. LibraryRepo)
-local MyFullUrl = (BaseUrl .. MyRepo)
+local FullLibUrl = BaseUrl .. LibraryRepo
+local MyFullUrl = BaseUrl .. MyRepo
 
 local IconAsset = "89380854415542"
 
@@ -80,9 +80,9 @@ local Dashboard = Window:DashboardPage({
 })
 
 Dashboard:AddCard({
-    Name = "MAIN", 
+    Name = "Main", 
     Description = "Toggles & sliders.", 
-    Icon = "gamepad-2", 
+    Icon = "house", 
     Tab = MainPage,
 })
 
@@ -93,18 +93,26 @@ Window:TabDivider()
 local MainCategory = Window:Category("Main")
 
 local MainPage = Window:Page({
-    Name = "Main", Icon = "house"
+    Name = "Main", 
+    Icon = "house"
 })
 
 --// Game Category //--
 local GameCategory = Window:Category("Game")
 
 local GamePage = Window:Page({
-    Name = GameName, Icon = "gamepad-2"
+    Name = GameName, 
+    Icon = "gamepad-2"
 })
 
 local UniversalPage = Window:Page({
-    Name = "Universal", Icon = "globe"
+    Name = "Universal", 
+    Icon = "globe"
+})
+
+local PlayersListPage = Window:Page({
+    Name = "Players List",
+    Icon = "users"
 })
 
 Window:TabDivider()
@@ -126,7 +134,7 @@ local Context = {
     JobId = JobId,
 
     Pages = {
-        Main = MainPage, Universal = UniversalPage, Game = GamePage,
+        Main = MainPage, Universal = UniversalPage, Game = GamePage, PlayersList = PlayersListPage
     },
 }
 
@@ -175,9 +183,14 @@ end
 --// Universal //--
 
 local UniversalScript = LoadScript("universal.lua")
+local PlayersListScript = LoadScript("playerslist.lua")
 
 if type(UniversalScript) == "function" then
     UniversalScript(Context)
+end
+
+if type(PlayersListScript) == "function" then
+    PlayersListScript(Context)
 end
 
 --// Settings //--
