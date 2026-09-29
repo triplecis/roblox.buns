@@ -117,6 +117,6 @@ return function(Context)
         Title = "Refinery Caves 2",
         Description = "Refinery Caves 2 page loaded.",
         Duration = 2,
-        Icon = 89380854415542,
+        Icon = "89380854415542",
     })
 end
