@@ -1,5 +1,8 @@
-local BaseUrl = "https://raw.githubusercontent.com/"; local LibraryRepo = "samuraa1/MentalityUI/refs/heads/main/"; local MyRepo = "triplecis/roblox.buns/refs/heads/main/"
-local FullLibUrl = BaseUrl .. LibraryRepo; local MyFullUrl = BaseUrl .. MyRepo
+local BaseUrl = "https://raw.githubusercontent.com/" 
+local LibraryRepo = "samuraa1/MentalityUI/refs/heads/main/" 
+local MyRepo = "triplecis/roblox.buns/refs/heads/main/"
+local FullLibUrl = (BaseUrl .. LibraryRepo)
+local MyFullUrl = (BaseUrl .. MyRepo)
 
 local IconAsset = "89380854415542"
 
@@ -33,7 +36,7 @@ Library:Notification({
 local Window = Library:Window({
     Name = "roblox.buns",
     SubName = GameName,
-    Logo = "1",
+    Logo = IconAsset,
 })
 
 local KeybindList = Library:KeybindList("Keybinds")
@@ -77,14 +80,13 @@ local Dashboard = Window:DashboardPage({
 })
 
 Dashboard:AddCard({
-    Name = "MAIN", Description = "Toggles & sliders.", Icon = "gamepad-2", Tab = MainPage,
+    Name = "MAIN", 
+    Description = "Toggles & sliders.", 
+    Icon = "gamepad-2", 
+    Tab = MainPage,
 })
 
---[[Dashboard:AddCard({
-    Name = "MAIN", Description = "Toggles & sliders.", Icon = "gamepad-2", Tab = MainPage,
-})]]--
-
-local TabDivider0 = Window:TabDivider()
+Window:TabDivider()
 
 -- // Main Category //--
 
@@ -105,14 +107,23 @@ local UniversalPage = Window:Page({
     Name = "Universal", Icon = "globe"
 })
 
-local TabDivider1 = Window:TabDivider()
+Window:TabDivider()
 
 local Context = {
-    Library = Library, Window = Window, SaveManager = SaveManager, ThemeManager = ThemeManager,
-    IconAsset = IconAsset
+    Library = Library, 
+    Window = Window,
+    
+    SaveManager = SaveManager, 
+    ThemeManager = ThemeManager,
+
+    IconAsset = IconAsset,
+    MyFullUrl = MyFullUrl,
+
     Player = Player,
 
-    PlaceId = PlaceId, GameId = GameId, JobId = JobId,
+    PlaceId = PlaceId, 
+    GameId = GameId, 
+    JobId = JobId,
 
     Pages = {
         Main = MainPage, Universal = UniversalPage, Game = GamePage,
@@ -144,7 +155,7 @@ local Games = {
 --// Script Loader //--
 
 local function LoadScript(Path)
-    local URL = BaseUrl .. MyRepo .. Path
+    local URL = MyFullUrl .. Path
 
     local Success, Result = pcall(function()
         return loadstring(game:HttpGet(URL))()
