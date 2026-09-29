@@ -4,8 +4,6 @@ local MyRepo = "triplecis/roblox.buns/refs/heads/main/"
 local FullLibUrl = BaseUrl .. LibraryRepo
 local MyFullUrl = BaseUrl .. MyRepo
 
-local IconAsset = "89380854415542"
-
 -- // IDs // --
 local PlaceId = game.PlaceId
 local GameId = game.GameId
@@ -30,16 +28,14 @@ Library:Notification({
     Title = "roblox.buns", 
     Description = "Loader loading.", 
     Duration = 3, 
-    Icon = IconAsset,
+    Icon = "89380854415542",
 })
 
 local Window = Library:Window({
     Name = "roblox.buns",
     SubName = GameName,
-    Logo = IconAsset,
+    Logo = "89380854415542",
 })
-
-local KeybindList = Library:KeybindList("Keybinds")
 
 local Dashboard = Window:DashboardPage({
     Name = "Dashboard",
@@ -117,7 +113,6 @@ local Context = {
     SaveManager = SaveManager, 
     ThemeManager = ThemeManager,
 
-    IconAsset = IconAsset,
     MyFullUrl = MyFullUrl,
 
     Player = Player,
@@ -167,7 +162,7 @@ local function LoadScript(Path)
             Title = "HTTP Error",
             Description = "Failed to download " .. Path .. ": " .. tostring(Source),
             Duration = 5,
-            Icon = IconAsset,
+            Icon = "89380854415542",
         })
 
         return nil
@@ -180,7 +175,7 @@ local function LoadScript(Path)
             Title = "Compile Error",
             Description = Path .. ": " .. tostring(CompileError),
             Duration = 8,
-            Icon = IconAsset,
+            Icon = "89380854415542",
         })
 
         return nil
@@ -193,7 +188,7 @@ local function LoadScript(Path)
             Title = "Runtime Error",
             Description = Path .. ": " .. tostring(Result),
             Duration = 8,
-            Icon = IconAsset,
+            Icon = "89380854415542",
         })
 
         return nil
@@ -246,7 +241,7 @@ else
         Title = "Unsupported", 
         Description = "No game module found for GameId: " .. tostring(GameId), 
         Duration = 5, 
-        Icon = IconAsset,
+        Icon = "89380854415542",
     })
 end
 

@@ -38,9 +38,9 @@ return function(Context)
         Side = 1,
     })
 
-    local VisualsSection = GamePage:Section({
-        Name = "Visuals",
-        Icon = "eye",
+    local BuySection = GamePage:Section({
+        Name = "Buy",
+        Icon = "store",
         Side = 2,
     })
 
@@ -67,7 +67,7 @@ return function(Context)
             Vehicles = VehiclesSection,
             Base = BaseSection,
             Automation = AutomationSection,
-            Visuals = VisualsSection,
+            Buy = BuySection,
             Misc = MiscSection,
         },
     }
@@ -82,7 +82,7 @@ return function(Context)
         "vehicles.lua",
         "base.lua",
         "automation.lua",
-        "visuals.lua",
+        "buy.lua",
         "misc.lua",
     }
 
@@ -117,6 +117,6 @@ return function(Context)
         Title = "Refinery Caves 2",
         Description = "Refinery Caves 2 page loaded.",
         Duration = 2,
-        Icon = Context.IconAsset,
+        Icon = 89380854415542,
     })
 end

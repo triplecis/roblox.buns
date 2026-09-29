@@ -21,7 +21,7 @@ return function(Context)
     --// Functions //--
 
     local function ApplyWalkSpeed()
-        if not WalkSpeedToggle or not WalkSpeedToggle.State then
+        if not WalkSpeedToggle or not WalkSpeedToggle.Value then
             return
         end
 
@@ -39,7 +39,7 @@ return function(Context)
 
         BaseWalkSpeed = Humanoid.WalkSpeed
 
-        if WalkSpeedToggle and WalkSpeedToggle.State then
+        if WalkSpeedToggle and WalkSpeedToggle.Value then
             ApplyWalkSpeed()
         end
     end)
@@ -56,20 +56,31 @@ return function(Context)
         BaseJumpPower = Humanoid.JumpPower
         BaseJumpHeight = Humanoid.JumpHeight
 
-        if Jump and WalkSpeedToggle.State then
+        if Jump and WalkSpeedToggle.Value then
             ApplyWalkSpeed()
         end
     end)
     -- // Sections // --
     
     local PlayerSection = UniversalPage:Section({
-        Name = "Player", Icon = "user", Side = 1,
-    }); local MovementSection = UniversalPage:Section({
-        Name = "Movement", Icon = "zap", Side = 2,
-    }); local VisualSection = UniversalPage:Section({
-        Name = "Visuals", Icon = "eye", Side = 1,
-    }); local CameraSection = UniversalPage:Section({
-        Name = "Camera", Icon = "camera", Side = 2,
+        Name = "Player", 
+        Icon = "user", 
+        Side = 1,
+    })
+    local MovementSection = UniversalPage:Section({
+        Name = "Movement", 
+        Icon = "zap", 
+        Side = 2,
+    })
+    local VisualSection = UniversalPage:Section({
+        Name = "Visuals", 
+        Icon = "eye", 
+        Side = 1,
+    })
+    local CameraSection = UniversalPage:Section({
+        Name = "Camera", 
+        Icon = "camera", 
+        Side = 2,
     })
 
     local WalkSpeedToggle = PlayerSection:Toggle({
@@ -96,7 +107,7 @@ return function(Context)
         Increment = 2, 
         Suffix = " %",
         Callback = function(Value)
-            if WalkSpeedToggle.State then
+            if WalkSpeedToggle.Value then
                 local Multiplier = 1 + (WalkSpeedSlider.Value / WalkSpeedSlider.Max)
                 Humanoid.WalkSpeed = (Humanoid.WalkSpeed * Multiplier)
             end
@@ -120,8 +131,15 @@ return function(Context)
 
         local JumpPowerSub = JumpPowerToggle:Settings(260)
         local JumpPowerSlider = JumpPowerSub:Slider({
-            Name = "Jump", Flag = "JumpPowerSlider", Default = 50, Min = 10, Max = 200, Increment = 2, Suffix = " JumpPower", Callback = function(Value)
-                if JumpPowerToggle.State then
+            Name = "Jump", 
+            Flag = "JumpPowerSlider", 
+            Default = 50, 
+            Min = 10, 
+            Max = 500, 
+            Increment = 2, 
+            Suffix = " %", 
+            Callback = function(Value)
+                if JumpPowerToggle.Value then
                     Humanoid.JumpPower = Value
                 end
             end,
@@ -148,7 +166,7 @@ return function(Context)
             Max = 200, 
             Increment = 2, 
             Suffix = " %", Callback = function(Value)
-                if JumpHeightToggle.State then
+                if JumpHeightToggle.Value then
                     Humanoid.JumpHeight = Value
                 end
             end,
@@ -160,6 +178,6 @@ return function(Context)
         Title = "Universal", 
         Description = "Universal page loaded.", 
         Duration = 2, 
-        Icon = "97594400820219",
+        Icon = "89380854415542",
     })
 end --// Closes [return function(Context)]
