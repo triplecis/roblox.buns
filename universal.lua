@@ -8,13 +8,20 @@ return function(Context)
     local UniversalPage = Context.Pages.Universal
 
 
-   local BaseWalkSpeed = Humanoid.WalkSpeed or 16; local BaseJumpPower = Humanoid.JumpPower or 50 ; local BaseJumpHeight = Humanoid.JumpHeight or 7.2
-    local ChangingWalkSpeed = false; local ChangingJump = false
+    local BaseWalkSpeed = Humanoid.WalkSpeed or 16
+    local BaseJumpPower = Humanoid.JumpPower or 50 
+    local BaseJumpHeight = Humanoid.JumpHeight or 7.2
+
+    local ChangingWalkSpeed = false
+    local ChangingJump = false
+
+    local WalkSpeedToggle
+    local WalkSpeedSlider
 
     --// Functions //--
 
     local function ApplyWalkSpeed()
-        if not WalkSpeedToggle or WalkSpeedToggle.State then
+        if not WalkSpeedToggle or not WalkSpeedToggle.State then
             return
         end
 
@@ -146,7 +153,7 @@ return function(Context)
                 end
             end,
         })
-    
+    end
     
 
     Library:Notification({
@@ -155,4 +162,4 @@ return function(Context)
         Duration = 2, 
         Icon = "97594400820219",
     })
-end
+end --// Closes [return function(Context)]

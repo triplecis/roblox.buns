@@ -79,13 +79,6 @@ local Dashboard = Window:DashboardPage({
     },
 })
 
-Dashboard:AddCard({
-    Name = "Main", 
-    Description = "Toggles & sliders.", 
-    Icon = "house", 
-    Tab = MainPage,
-})
-
 Window:TabDivider()
 
 -- // Main Category //--
@@ -165,13 +158,42 @@ local Games = {
 local function LoadScript(Path)
     local URL = MyFullUrl .. Path
 
-    local Success, Result = pcall(function()
-        return loadstring(game:HttpGet(URL))()
+    local Success, Source = pcall(function()
+        return game:HttpGet(URL)
     end)
 
     if not Success then
         Library:Notification({
-            Title = "Error", Description = "Failed to load " .. Path .. ": " .. tostring(Result), Duration = 5, Icon = IconAsset,
+            Title = "HTTP Error",
+            Description = "Failed to download " .. Path .. ": " .. tostring(Source),
+            Duration = 5,
+            Icon = IconAsset,
+        })
+
+        return nil
+    end
+
+    local Script, CompileError = loadstring(Source)
+
+    if not Script then
+        Library:Notification({
+            Title = "Compile Error",
+            Description = Path .. ": " .. tostring(CompileError),
+            Duration = 8,
+            Icon = IconAsset,
+        })
+
+        return nil
+    end
+
+    local RunSuccess, Result = pcall(Script)
+
+    if not RunSuccess then
+        Library:Notification({
+            Title = "Runtime Error",
+            Description = Path .. ": " .. tostring(Result),
+            Duration = 8,
+            Icon = IconAsset,
         })
 
         return nil
@@ -227,3 +249,10 @@ else
         Icon = IconAsset,
     })
 end
+
+Dashboard:AddCard({
+    Name = "Main", 
+    Description = "Toggles & sliders.", 
+    Icon = "house", 
+    Tab = MainPage,
+})
