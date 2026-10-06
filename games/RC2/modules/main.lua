@@ -18,7 +18,8 @@ return function(ModuleContext)
     --// Fishes game:GetService("ReplicatedStorage").Content.BigFish -> game:GetService("ReplicatedStorage").Content.Items (Fish Names)
     --// STORED
     --//
-    
+    print("Main:", MainSection)
+    print("Type:", typeof(MainSection))
     MainSection:Label("Mining")
     local OreList = MainSection:Listbox({
         Flag = "SelectedOres",
