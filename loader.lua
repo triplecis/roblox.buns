@@ -104,6 +104,11 @@ local PlayersListPage = Window:Page({
     Icon = "users"
 })
 
+local ScriptsPage = Window:Page({
+    Name = "Scripts",
+    Icon = "code"
+})
+
 Window:TabDivider()
 
 local Context = {
@@ -122,7 +127,11 @@ local Context = {
     JobId = JobId,
 
     Pages = {
-        Main = MainPage, Universal = UniversalPage, Game = GamePage, PlayersList = PlayersListPage
+        Main = MainPage, 
+        Universal = UniversalPage, 
+        Game = GamePage, 
+        PlayersList = PlayersListPage,
+        Scripts = ScriptsPage,
     },
 }
 

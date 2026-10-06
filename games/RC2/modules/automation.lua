@@ -1,7 +1,7 @@
-return function(ContextV)
-    local Library = ContextV.Library
-    local Window = ContextV.Window
+return function(ModuleContext)
+    local Library = ModuleContext.Library
+    local Window = ModuleContext.Window
 
-    local AutomationSection = ContextV.AutomationSection
+    local AutomationSection = ModuleContext.Automation
 
 end

@@ -1,7 +1,7 @@
-return function(ContextV)
-    local Library = ContextV.Library
-    local Window = ContextV.Window
+return function(ModuleContext)
+    local Library = ModuleContext.Library
+    local Window = ModuleContext.Window
 
-    local WorldSection = ContextV.WorldSection
+    local WorldSection = ModuleContext.World
 
 end
