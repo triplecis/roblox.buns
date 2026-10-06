@@ -1,47 +1,26 @@
-return function(ModuleContext)
-    local Library = ModuleContext.Library
-    local Window = ModuleContext.Window
+return function(Context)
+    local Clock = Context.Sections.Misc:Label("Server time unavailable")
+    local Elapsed = 0
 
-    local MiscSection = ModuleContext.Sections.Misc
+    local function Update()
+        local ServerData = workspace:FindFirstChild("ServerData")
+        local Cycle = ServerData and ServerData:FindFirstChild("CurrentCycle")
+        local ClockTime = Cycle and Cycle:FindFirstChild("ClockTime")
+        local Hours = ClockTime and ClockTime:IsA("ValueBase") and tonumber(ClockTime.Value)
+        if not Hours or Hours ~= Hours or math.abs(Hours) == math.huge then
+            Clock:SetText("Server time unavailable")
+            return
+        end
+        local Minutes = math.floor(Hours * 60 + 0.000001) % (24 * 60)
+        Clock:SetText(string.format("Server time: %02d:%02d", math.floor(Minutes / 60), Minutes % 60))
+    end
 
-    local ServerData = workspace.ServerData
-    local CurrentCycle = ServerData.CurrentCycle
-    local ClockTime = ServerData.ClockTime
-
-    --//
-    --// Time game:GetService("Players").LocalPlayer.PlayerGui.HUD.TopRight.Time
-    --// ServerTime workspace.ServerData.CurrentCycle --> ClockTime
-    --//
-
-   
+    Context.Connect(game:GetService("RunService").Heartbeat, function(DeltaTime)
+        Elapsed = Elapsed + DeltaTime
+        if Elapsed >= 1 then
+            Elapsed = Elapsed % 1
+            Update()
+        end
+    end)
+    Update()
 end
-
---[[
-local _ = game:GetService("Lighting")
-local ClockTime_upv_1 = workspace:WaitForChild("ServerData"):WaitForChild("CurrentCycle"):WaitForChild("ClockTime")
-local Values_1 = game.Players.LocalPlayer:WaitForChild("Values")
-local ShowClock_1 = Values_1:WaitForChild("ShowClock")
-local _ClockPass_1 = Values_1:WaitForChild("_ClockPass")
-local u1 = nil
-local u2 = nil
-function Check()
-    [
-      name: Check
-      line: 11
-      upvalues:
-        u1 (ref,  index: 1)
-        ClockTime_upv_1 (copy, index: 2)
-        u2 (ref,  index: 3)
-    ]
-    u1 = math.floor(ClockTime_upv_1.Value)
-    u2 = (ClockTime_upv_1.Value - u1) * 60
-    local v1 = ((u1 < 10) and "0") or ""
-    script.Parent.Text = string.format("%s%s:%s%s", v1, u1, ((u2 < 10) and "0") or "", math.floor(u2))
-end
-Check()
-ClockTime_upv_1:GetPropertyChangedSignal("Value"):Connect(Check)
-ShowClock_1:GetPropertyChangedSignal("Value"):Connect(Check)
-_ClockPass_1:GetPropertyChangedSignal("Value"):Connect(Check)
-
-
-]]--

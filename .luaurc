@@ -1,0 +1,12 @@
+{
+    "languageMode": "nonstrict",
+    "globals": [
+        "game",
+        "workspace",
+        "warn",
+        "getgenv",
+        "setclipboard",
+        "isfolder",
+        "makefolder"
+    ]
+}

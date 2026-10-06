@@ -1,122 +1,28 @@
---// Refinery Caves 2 //--
-
 return function(Context)
-    local Library = Context.Library
-    local Window = Context.Window
-    local GamePage = Context.Pages.Game
-    local MyFullUrl = Context.MyFullUrl
+    local ModuleContext = setmetatable({
+        Sections = {},
+        Selections = { Ores = {}, Trees = {}, Fishes = {}, Oils = {} },
+    }, { __index = Context })
+    Context.RC2 = ModuleContext
 
-    --// Sections //--
-
-    local MainSection = GamePage:Section({
-        Name = "Main",
-        Icon = "pickaxe",
-        Side = 1,
-    })
-
-    local WorldSection = GamePage:Section({
-        Name = "World",
-        Icon = "map-pinned",
-        Side = 2,
-    })
-
-    local VehiclesSection = GamePage:Section({
-        Name = "Vehicles",
-        Icon = "car",
-        Side = 1,
-    })
-
-    local BaseSection = GamePage:Section({
-        Name = "Base",
-        Icon = "house",
-        Side = 2,
-    })
-
-    local AutomationSection = GamePage:Section({
-        Name = "Automation",
-        Icon = "bot",
-        Side = 1,
-    })
-
-    local BuySection = GamePage:Section({
-        Name = "Buy",
-        Icon = "store",
-        Side = 2,
-    })
-
-    local MiscSection = GamePage:Section({
-        Name = "Misc",
-        Icon = "wrench",
-        Side = 1,
-    })
-
-    --// Context for RC2 modules //--
-
-    local ModuleContext = {
-        Library = Library,
-        Window = Window,
-
-        Player = Context.Player,
-        PlaceId = Context.PlaceId,
-        GameId = Context.GameId,
-        JobId = Context.JobId,
-
-        Sections = {
-            Main = MainSection,
-            World = WorldSection,
-            Vehicles = VehiclesSection,
-            Base = BaseSection,
-            Automation = AutomationSection,
-            Buy = BuySection,
-            Misc = MiscSection,
-        },
+    local Sections = {
+        { "Main", "pickaxe", 1 }, { "World", "map-pinned", 2 },
+        { "Vehicles", "car", 1 }, { "Base", "house", 2 },
+        { "Automation", "bot", 1 }, { "Buy", "store", 2 }, { "Misc", "wrench", 1 },
     }
-
-    --// Modules //--
-
-    local BasePath = "games/RC2/modules/"
-
-    local Modules = {
-        "main.lua",
-        "world.lua",
-        "vehicles.lua",
-        "base.lua",
-        "automation.lua",
-        "buy.lua",
-        "misc.lua",
-    }
-
-    for _, FileName in ipairs(Modules) do
-        local URL = MyFullUrl .. BasePath .. FileName
-
-        local Source = game:HttpGet(URL)
-        local Module, CompileError = loadstring(Source)
-
-        if not Module then
-            warn("Failed to compile " .. FileName .. ": " .. tostring(CompileError))
-            continue
-        end
-
-        local Success, Result = pcall(Module)
-
-        if not Success then
-            warn("Failed to load " .. FileName .. ": " .. tostring(Result))
-            continue
-        end
-
-        if type(Result) == "function" then
-            local ModuleSuccess, ModuleError = pcall(Result, ModuleContext)
-
-            if not ModuleSuccess then
-                warn("Failed to run " .. FileName .. ": " .. tostring(ModuleError))
-            end
-        end
+    for _, Info in ipairs(Sections) do
+        ModuleContext.Sections[Info[1]] = Context.Pages.Game:Section({
+            Name = Info[1], Icon = Info[2], Side = Info[3],
+        })
     end
 
-    Library:Notification({
-        Title = "Refinery Caves 2",
-        Description = "Refinery Caves 2 page loaded.",
-        Duration = 2,
-        Icon = "89380854415542",
-    })
+    local Modules = { "content", "main", "world", "vehicles", "base", "automation", "buy", "misc" }
+    local Loaded = 0
+    for _, Name in ipairs(Modules) do
+        if Context.LoadModule("games/RC2/modules/" .. Name .. ".lua", ModuleContext) then
+            Loaded = Loaded + 1
+        end
+    end
+    Context.Notify("Refinery Caves 2",
+        string.format("Loaded %d/%d modules.", Loaded, #Modules), 3)
 end

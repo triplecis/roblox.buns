@@ -1,7 +1,3 @@
-return function(ModuleContext)
-    local Library = ModuleContext.Library
-    local Window = ModuleContext.Window
-
-    local AutomationSection = ModuleContext.Sections.Automation
-
+return function(Context)
+    Context.Sections.Automation:Label("Automation tools are not configured.")
 end

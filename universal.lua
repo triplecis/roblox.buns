@@ -1,183 +1,119 @@
 return function(Context)
     local Player = Context.Player
-    local Character = Player.Character or Player.CharacterAdded:Wait()
-    local Humanoid = Character:WaitForChild("Humanoid")
+    local Section = Context.Pages.Universal:Section({ Name = "Player", Icon = "user", Side = 1 })
+    local Status = Section:Label("Waiting for character...")
+    local Humanoid
+    local CharacterConnections = {}
+    local Baselines, Applied = {}, {}
+    local Enabled = { WalkSpeed = false, JumpPower = false, JumpHeight = false }
+    local Values = { WalkSpeed = 16, JumpPower = 50, JumpHeight = 7.2 }
 
-    local Library = Context.Library
-    local Window = Context.Window
-    local UniversalPage = Context.Pages.Universal
-
-
-    local BaseWalkSpeed = Humanoid.WalkSpeed or 16
-    local BaseJumpPower = Humanoid.JumpPower or 50 
-    local BaseJumpHeight = Humanoid.JumpHeight or 7.2
-
-    local ChangingWalkSpeed = false
-    local ChangingJump = false
-
-    local WalkSpeedToggle
-    local WalkSpeedSlider
-
-    --// Functions //--
-
-    local function ApplyWalkSpeed()
-        if not WalkSpeedToggle or not WalkSpeedToggle.Value then
-            return
-        end
-
-        local Multiplier = 1 + (WalkSpeedSlider.Value / 100)
-
-        ChangingWalkSpeed = true
-        Humanoid.WalkSpeed = (BaseWalkSpeed * Multiplier)
-        ChangingWalkSpeed = false
+    local function DisconnectCharacter()
+        for _, Connection in ipairs(CharacterConnections) do Connection:Disconnect() end
+        table.clear(CharacterConnections)
     end
 
-    Humanoid:GetPropertyChangedSignal("WalkSpeed"):Connect(function()
-        if ChangingWalkSpeed then
-            return
-        end
-
-        BaseWalkSpeed = Humanoid.WalkSpeed
-
-        if WalkSpeedToggle and WalkSpeedToggle.Value then
-            ApplyWalkSpeed()
-        end
-    end)
-
-    local function ApplyJump()
-        --//apply later
+    local function Apply(Property)
+        if not Humanoid or not Humanoid.Parent or not Enabled[Property] then return end
+        local Value = Values[Property]
+        if Property == "WalkSpeed" then Value = Baselines.WalkSpeed * (1 + Value / 100) end
+        -- Signals may be deferred; remember our writes rather than using a temporary guard.
+        Applied[Property] = Value
+        if Humanoid[Property] ~= Value then Humanoid[Property] = Value end
     end
 
-    Humanoid:GetPropertyChangedSignal("JumpPower" or "JumpHeight"):Connect(function()
-        if ChangingJump then
-            return
-        end
-
-        BaseJumpPower = Humanoid.JumpPower
-        BaseJumpHeight = Humanoid.JumpHeight
-
-        if Jump and WalkSpeedToggle.Value then
-            ApplyWalkSpeed()
-        end
-    end)
-    -- // Sections // --
-    
-    local PlayerSection = UniversalPage:Section({
-        Name = "Player", 
-        Icon = "user", 
-        Side = 1,
-    })
-    local MovementSection = UniversalPage:Section({
-        Name = "Movement", 
-        Icon = "zap", 
-        Side = 2,
-    })
-    local VisualSection = UniversalPage:Section({
-        Name = "Visuals", 
-        Icon = "eye", 
-        Side = 1,
-    })
-    local CameraSection = UniversalPage:Section({
-        Name = "Camera", 
-        Icon = "camera", 
-        Side = 2,
-    })
-
-    local WalkSpeedToggle = PlayerSection:Toggle({
-        Name = "WalkSpeed Toggle", 
-        Flag = "WalkSpeedToggle", 
-        Default = false, 
-        Tooltip = "Toggles WalkSpeed modification", 
-        Callback = function(State)
-            if State then
-                BaseWalkSpeed = Humanoid.WalkSpeed
-                ApplyWalkSpeed()
-            else
-                ChangingWalkSpeed = true
-                Humanoid.WalkSpeed = BaseWalkSpeed
-                ChangingWalkSpeed = false
+    local function Restore(Property)
+        if Humanoid and Humanoid.Parent and Baselines[Property] ~= nil then
+            -- Capture a game update even if its change signal has not run yet.
+            if Applied[Property] ~= nil and Humanoid[Property] ~= Applied[Property] then
+                Baselines[Property] = Humanoid[Property]
             end
-        end,
-    }); local WalkSpeedSub = WalkSpeedToggle:Settings(260); local WalkSpeedSlider = WalkSpeedSub:Slider({
-        Name = "Speed", 
-        Flag = "WalkSpeedSlider", 
-        Default = 16, 
-        Min = 10, 
-        Max = 500, 
-        Increment = 2, 
-        Suffix = " %",
-        Callback = function(Value)
-            if WalkSpeedToggle.Value then
-                local Multiplier = 1 + (WalkSpeedSlider.Value / WalkSpeedSlider.Max)
-                Humanoid.WalkSpeed = (Humanoid.WalkSpeed * Multiplier)
+            Applied[Property] = Baselines[Property]
+            Humanoid[Property] = Baselines[Property]
+        end
+    end
+
+    local function UpdateStatus()
+        if not Context.Alive then return end
+        Status:SetText(Humanoid and (Humanoid.UseJumpPower and "Jump mode: power" or "Jump mode: height")
+            or "Waiting for character...")
+    end
+
+    local function BindHumanoid(NewHumanoid)
+        Humanoid = NewHumanoid
+        table.clear(Applied)
+        for _, Property in ipairs({ "WalkSpeed", "JumpPower", "JumpHeight" }) do
+            Baselines[Property] = Humanoid[Property]
+            table.insert(CharacterConnections, Humanoid:GetPropertyChangedSignal(Property):Connect(function()
+                if not Context.Alive or Humanoid ~= NewHumanoid then return end
+                local Current = NewHumanoid[Property]
+                if Current == Applied[Property] then return end
+                Baselines[Property] = Current
+                Apply(Property)
+            end))
+            Apply(Property)
+        end
+        table.insert(CharacterConnections, Humanoid:GetPropertyChangedSignal("UseJumpPower"):Connect(UpdateStatus))
+        UpdateStatus()
+    end
+
+    local function BindCharacter(Character)
+        DisconnectCharacter()
+        Humanoid = nil
+        table.clear(Baselines)
+        table.clear(Applied)
+        UpdateStatus()
+        -- Listen first so a delayed Humanoid is handled without blocking other pages.
+        table.insert(CharacterConnections, Character.ChildAdded:Connect(function(Child)
+            if Context.Alive and Player.Character == Character and Child:IsA("Humanoid") and not Humanoid then
+                BindHumanoid(Child)
             end
-        end,
-    }); 
+        end))
+        local Existing = Character:FindFirstChildOfClass("Humanoid")
+        if Existing then BindHumanoid(Existing) end
+    end
 
-    if Humanoid.UseJumpPower == true then
-        local JumpPowerToggle = PlayerSection:Toggle({
-            Name = "Jump Power Toggle", 
-            Flag = "JumpPowerToggle", 
-            Default = false, 
-            Tooltip = "Toggles Jump Power modification", Callback = function(State)
-
-            if State then
-                Humanoid.JumpPower = JumpPowerSlider.Value
-
-            else
-                Humanoid.JumpPower = BaseJumpPower
-
-            end; end,}); 
-
-        local JumpPowerSub = JumpPowerToggle:Settings(260)
-        local JumpPowerSlider = JumpPowerSub:Slider({
-            Name = "Jump", 
-            Flag = "JumpPowerSlider", 
-            Default = 50, 
-            Min = 10, 
-            Max = 500, 
-            Increment = 2, 
-            Suffix = " %", 
+    local function AddControl(Property, Name, Flag, Min, Max, Decimals, Suffix)
+        local Toggle = Section:Toggle({
+            Name = Name, Flag = Flag .. "Toggle", Default = false,
+            Callback = function(State)
+                local WasEnabled = Enabled[Property]
+                Enabled[Property] = State
+                if State then
+                    if Humanoid and not WasEnabled then Baselines[Property] = Humanoid[Property] end
+                    Apply(Property)
+                elseif WasEnabled then
+                    Restore(Property)
+                end
+            end,
+        })
+        Toggle:Settings(260):Slider({
+            Name = Property == "WalkSpeed" and "Speed increase" or Name,
+            Flag = Flag .. "Slider", Default = Values[Property],
+            Min = Min, Max = Max, Decimals = Decimals, Suffix = Suffix,
             Callback = function(Value)
-                if JumpPowerToggle.Value then
-                    Humanoid.JumpPower = Value
-                end
-            end,
-        })
-    else
-        local JumpHeightToggle = PlayerSection:Toggle({
-            Name = "JumpHeight Toggle", 
-            Flag = "JumpHeightToggle", 
-            Default = false, 
-            Tooltip = "Toggles Jump Height modification", Callback = function(State)
-
-            if State then
-                Humanoid.JumpHeight = JumpHeightSlider.Value
-
-            else
-                Humanoid.JumpHeight = BaseJumpHeight
-            end; end,});
-        local JumpHeightSub = JumpHeightToggle:Settings(260)
-        local JumpHeightSlider = JumpHeightSub:Slider({
-            Name = "Jump", 
-            Flag = "JumpHeightSlider", 
-            Default = 50, 
-            Min = 10, 
-            Max = 200, 
-            Increment = 2, 
-            Suffix = " %", Callback = function(Value)
-                if JumpHeightToggle.Value then
-                    Humanoid.JumpHeight = Value
-                end
+                Values[Property] = Value
+                Apply(Property)
             end,
         })
     end
-    
 
-    Library:Notification({
-        Title = "Universal", 
-        Description = "Universal page loaded.", 
-        Duration = 2, 
-        Icon = "89380854415542",
-    })
-end --// Closes [return function(Context)]
+    AddControl("WalkSpeed", "Walk speed", "WalkSpeed", 0, 500, 1, " %")
+    AddControl("JumpPower", "Jump power", "JumpPower", 0, 500, 1, "")
+    AddControl("JumpHeight", "Jump height", "JumpHeight", 0, 200, 0.1, " studs")
+
+    Context.Connect(Player.CharacterAdded, BindCharacter)
+    Context.Connect(Player.CharacterRemoving, function()
+        DisconnectCharacter()
+        Humanoid = nil
+        UpdateStatus()
+    end)
+    Context.AddCleanup(function()
+        DisconnectCharacter()
+        for Property, State in pairs(Enabled) do
+            if State then Restore(Property) end
+        end
+        Humanoid = nil
+    end)
+    if Player.Character then BindCharacter(Player.Character) end
+end

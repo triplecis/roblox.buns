@@ -1,60 +1,40 @@
-return function(ModuleContext)
-    local Library = ModuleContext.Library
-    local Window = ModuleContext.Window
+return function(Context)
+    local Section = Context.Sections.Main
+    local Lists, Statuses = {}, {}
+    local Groups = {
+        { "Ores", "Mining", "SelectedOres" },
+        { "Trees", "Forestry", "SelectedTrees" },
+        { "Fishes", "Fishing", "SelectedFishes" },
+        { "Oils", "Oil", "SelectedOils" },
+    }
+    for _, Group in ipairs(Groups) do
+        local Key = Group[1]
+        Section:Label(Group[2])
+        Statuses[Key] = Section:Label("")
+        Lists[Key] = Section:Listbox({
+            Flag = Group[3], Items = Context.Catalog[Key], Multi = true,
+            Callback = function(Value)
+                Context.Selections[Key] = table.clone(Value)
+            end,
+        })
+    end
 
-    local MainSection = ModuleContext.Sections.Main
+    local function Refresh(Catalog)
+        for Key, List in pairs(Lists) do
+            local Available = {}
+            for _, Name in ipairs(Catalog[Key]) do Available[Name] = true end
+            local Selected = {}
+            for _, Name in ipairs(Context.Selections[Key]) do
+                if Available[Name] then table.insert(Selected, Name) end
+            end
+            List:Refresh(Catalog[Key])
+            List:Set(Selected)
+            Statuses[Key]:SetText(#Catalog[Key] > 0 and (tostring(#Catalog[Key]) .. " available")
+                or "No resource definitions available.")
+        end
+    end
 
-    local Items = game:GetService("ReplicatedStorage").Content.Items
-    local Ores = game:GetService("ReplicatedStorage").Content.Ores -- Needs to ignore bushes
-    local Trees = game:GetService("ReplicatedStorage").Content.Trees
-    local Fish = game:GetService("ReplicatedStorage").Content.Items -- Needs to ignore invalid names and only get fishes
-    local BigFish = game:GetService("ReplicatedStorage").Content.BigFish -- Needs to ignore bushes
-   
-    --//
-    --// VALUES
-    --// Items game:GetService("ReplicatedStorage").Content.Items
-    --// Ores game:GetService("ReplicatedStorage").Content.Ores
-    --// Trees game:GetService("ReplicatedStorage").Content.Trees
-    --// Fishes game:GetService("ReplicatedStorage").Content.BigFish -> game:GetService("ReplicatedStorage").Content.Items (Fish Names)
-    --// STORED
-    --//
-    print("Main:", MainSection)
-    print("Type:", typeof(MainSection))
-    MainSection:Label("Mining")
-    local OreList = MainSection:Listbox({
-        Flag = "SelectedOres",
-        Items = {},
-        Multi = true,
-        Callback = function(Value)
-            print(Value)
-        end,
-    })
-
-    MainSection:Label("Forestry")
-    local TreeList = MainSection:Listbox({
-        Flag = "SelectedTrees",
-        Items = {},
-        Multi = true,
-        Callback = function(Value)
-            print(Value)
-        end,
-    })
-    MainSection:Label("Fishing")
-    local FishList = MainSection:Listbox({
-        Flag = "SelectedFishes",
-        Items = {},
-        Multi = true,
-        Callback = function(Value)
-            print(Value)
-        end,
-    })
-    MainSection:Label("Oil")
-    local OilList = MainSection:Listbox({
-        Flag = "SelectedOils",
-        Items = {},
-        Multi = true,
-        Callback = function(Value)
-            print(Value)
-        end,
-    })
+    table.insert(Context.CatalogListeners, Refresh)
+    Section:Button({ Name = "Refresh resources", Icon = "refresh-cw", Callback = Context.RefreshCatalog })
+    Refresh(Context.Catalog)
 end

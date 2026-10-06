@@ -1,264 +1,209 @@
-local BaseUrl = "https://raw.githubusercontent.com/" 
-local LibraryRepo = "samuraa1/MentalityUI/refs/heads/main/" 
-local MyRepo = "triplecis/roblox.buns/refs/heads/main/"
-local FullLibUrl = BaseUrl .. LibraryRepo
-local MyFullUrl = BaseUrl .. MyRepo
+local BaseUrl = "https://raw.githubusercontent.com/"
+-- Pin the UI API used by this project so upstream changes cannot break the loader.
+local LibraryRepo = "samuraa1/MentalityUI/4f5c7733335bd6576f9fbda7931e8838b1eb8d39/"
+local MyFullUrl = BaseUrl .. "triplecis/roblox.buns/refs/heads/main/"
+local Icon = "89380854415542"
+local Player = game:GetService("Players").LocalPlayer
+if not Player then
+    warn("roblox.buns must be loaded on the client after LocalPlayer is available.")
+    return
+end
 
--- // IDs // --
-local PlaceId = game.PlaceId
-local GameId = game.GameId
-local JobId = game.JobId
-
---// Local Player //--
-
-local Player = game.Players.LocalPlayer
-
---// Get Game Info //--
-local MarketplaceService = game:GetService("MarketplaceService")
-local GameName = MarketplaceService:GetProductInfo(PlaceId).Name
-local GameDescription = MarketplaceService:GetProductInfo(PlaceId).Description
-
---// MentalityUI Loader //--
-
-local Library = loadstring(game:HttpGet(FullLibUrl .. "Library.lua"))()
-local SaveManager = loadstring(game:HttpGet(FullLibUrl .. "SaveManager.lua"))()
-local ThemeManager = loadstring(game:HttpGet(FullLibUrl .. "ThemeManager.lua"))()
-
-Library:Notification({
-    Title = "roblox.buns", 
-    Description = "Loader loading.", 
-    Duration = 3, 
-    Icon = "89380854415542",
-})
-
-local Window = Library:Window({
-    Name = "roblox.buns",
-    SubName = GameName,
-    Logo = "89380854415542",
-})
-
-local Dashboard = Window:DashboardPage({
-    Name = "Dashboard",
-    Icon = "layout-dashboard",
-    WelcomeText = "WELCOME TO",
-    HubName = "roblox.buns",
-    StatusText = "documentation build",
-    Badge = "PLAYER",
-    GameName = GameName,
-    GameDescription = GameDescription,
-    Links = {
-        {
-            Icon = "copy", Tooltip = "Copy Discord to clipboard", Callback = function()
-                pcall(function()
-                    setclipboard("https://discord.gg/ys78VPnnJQ")
-                    
-                end)
-                Library:Notification({
-                    Title = "Copied", Description = "Clipboard updated.", Duration = 2, Icon = "89380854415542",
-                })
-            end,
-        },
-    },
-    Stats = {
-        {
-            Name = "TIME", Icon = "clock", GetValue = function()
-                return os.date("%H:%M:%S")
-            end,
-        },
-        {
-            Name = "GAMETIME", Icon = "clock", GetValue = function()
-                return tostring(math.floor(workspace.DistributedGameTime)) .. "s"
-            end,
-        },
-    },
-    QuickAccess = {
-    },
-})
-
-Window:TabDivider()
-
--- // Main Category //--
-
-local MainCategory = Window:Category("Main")
-
-local MainPage = Window:Page({
-    Name = "Main", 
-    Icon = "house"
-})
-
---// Game Category //--
-local GameCategory = Window:Category("Game")
-
-local GamePage = Window:Page({
-    Name = GameName, 
-    Icon = "gamepad-2"
-})
-
-local UniversalPage = Window:Page({
-    Name = "Universal", 
-    Icon = "globe"
-})
-
-local PlayersListPage = Window:Page({
-    Name = "Players List",
-    Icon = "users"
-})
-
-local ScriptsPage = Window:Page({
-    Name = "Scripts",
-    Icon = "code"
-})
-
-Window:TabDivider()
-
-local Context = {
-    Library = Library, 
-    Window = Window,
-    
-    SaveManager = SaveManager, 
-    ThemeManager = ThemeManager,
-
-    MyFullUrl = MyFullUrl,
-
-    Player = Player,
-
-    PlaceId = PlaceId, 
-    GameId = GameId, 
-    JobId = JobId,
-
-    Pages = {
-        Main = MainPage, 
-        Universal = UniversalPage, 
-        Game = GamePage, 
-        PlayersList = PlayersListPage,
-        Scripts = ScriptsPage,
-    },
-}
-
---// Games //--
-
-local Games = {
-    [4298676072] = {
-        Folder = "RC2",
-        Default = "4298676072.lua",
-    },
-
-    -- Example of a game with multiple places:
-    --[[
-    [1234567890] = {
-        Folder = "ExampleGame",
-        Default = "main.lua",
-
-        Places = {
-            [1111111111] = "lobby.lua",
-            [2222222222] = "match.lua",
-        },
-    },
-    ]]
-}
-
---// Script Loader //--
-
-local function LoadScript(Path)
-    local URL = MyFullUrl .. Path
-
-    local Success, Source = pcall(function()
-        return game:HttpGet(URL)
-    end)
-
+local Environment = getgenv and getgenv() or _G
+local PreviousContext = Environment.RobloxBunsContext
+if PreviousContext and PreviousContext.Destroy then
+    local Success, Error = pcall(PreviousContext.Destroy)
     if not Success then
-        Library:Notification({
-            Title = "HTTP Error",
-            Description = "Failed to download " .. Path .. ": " .. tostring(Source),
-            Duration = 5,
-            Icon = "89380854415542",
-        })
-
-        return nil
+        warn("Failed to unload the previous roblox.buns session: " .. tostring(Error))
     end
+end
 
-    local Script, CompileError = loadstring(Source)
-
-    if not Script then
-        Library:Notification({
-            Title = "Compile Error",
-            Description = Path .. ": " .. tostring(CompileError),
-            Duration = 8,
-            Icon = "89380854415542",
-        })
-
-        return nil
+local function Download(URL)
+    local Success, Source = pcall(function() return game:HttpGet(URL) end)
+    if not Success then
+        return nil, "HTTP error: " .. tostring(Source)
     end
+    if type(Source) ~= "string" or Source == "" then
+        return nil, "HTTP response was empty or invalid"
+    end
+    return Source
+end
 
-    local RunSuccess, Result = pcall(Script)
-
+local function Execute(Source, Name)
+    local Success, Chunk, CompileError = pcall(loadstring, Source, "=" .. Name)
+    if not Success or not Chunk then
+        return nil, "Compile error: " .. tostring(CompileError or Chunk)
+    end
+    local RunSuccess, Result = pcall(Chunk)
     if not RunSuccess then
-        Library:Notification({
-            Title = "Runtime Error",
-            Description = Path .. ": " .. tostring(Result),
-            Duration = 8,
-            Icon = "89380854415542",
-        })
-
-        return nil
+        return nil, "Runtime error: " .. tostring(Result)
     end
-
     return Result
 end
 
---// Universal //--
-
-local UniversalScript = LoadScript("universal.lua")
-local PlayersListScript = LoadScript("playerslist.lua")
-local ScriptsScript = LoadScript("scripts.lua")
-local SettingsScript = LoadScript("settings.lua")
-
-if type(UniversalScript) == "function" then
-    UniversalScript(Context)
+local LibrarySource, LibraryError = Download(BaseUrl .. LibraryRepo .. "Library.lua")
+if not LibrarySource then
+    warn("roblox.buns: " .. LibraryError)
+    return
+end
+local Library, StartupError = Execute(LibrarySource, "MentalityUI/Library.lua")
+if type(Library) ~= "table" then
+    warn("roblox.buns could not load MentalityUI: " .. tostring(StartupError or "invalid library"))
+    return
 end
 
-if type(PlayersListScript) == "function" then
-    PlayersListScript(Context)
+local PlaceId, GameId = game.PlaceId, game.GameId
+local GameName = "Place " .. tostring(PlaceId)
+local GameDescription = "Game information is unavailable."
+local InfoSuccess, GameInfo = pcall(function()
+    return game:GetService("MarketplaceService"):GetProductInfo(PlaceId)
+end)
+if InfoSuccess and type(GameInfo) == "table" then
+    GameName = GameInfo.Name or GameName
+    GameDescription = GameInfo.Description or GameDescription
 end
 
-if type(ScriptsScript) == "function" then
-    ScriptsScript(Context)
-end
-
-if type(SettingsScript) == "function" then
-    SettingsScript(Context)
-end
-
---// Game //--
-
-local GameData = Games[GameId]
-
-if GameData then
-    local Filename = GameData.Default
-
-    if GameData.Places and GameData.Places[PlaceId] then
-        Filename = GameData.Places[PlaceId]
+-- MentalityUI provides settings and config persistence directly.
+Library.Folders.Directory = "roblox.buns"
+Library.Folders.Configs = "roblox.buns/Configs/" .. tostring(GameId)
+if type(makefolder) == "function" and type(isfolder) == "function" then
+    for _, Folder in ipairs({ "roblox.buns", "roblox.buns/Configs", Library.Folders.Configs }) do
+        pcall(function()
+            if not isfolder(Folder) then makefolder(Folder) end
+        end)
     end
+end
 
-    local Path = "games/" .. GameData.Folder .. "/" .. Filename
+local Context = {
+    Library = Library, MyFullUrl = MyFullUrl, Player = Player,
+    PlaceId = PlaceId, GameId = GameId, JobId = game.JobId,
+    GameName = GameName, Alive = true, Pages = {},
+}
+local Cleanups = {}
 
-    local GameScript = LoadScript(Path)
-
-    if type(GameScript) == "function" then
-        GameScript(Context)
+function Context.Notify(Title, Description, Duration)
+    if not Context.Alive then return end
+    local Success, Error = pcall(function()
+        Library:Notification({
+            Title = Title, Description = tostring(Description),
+            Duration = Duration or 5, Icon = Icon,
+        })
+    end)
+    if not Success then
+        warn(Title .. ": " .. tostring(Description) .. " (notification failed: " .. tostring(Error) .. ")")
     end
-else
-    Library:Notification({
-        Title = "Unsupported", 
-        Description = "No game module found for GameId: " .. tostring(GameId), 
-        Duration = 5, 
-        Icon = "89380854415542",
+end
+
+function Context.AddCleanup(Callback)
+    if Context.Alive then
+        table.insert(Cleanups, Callback)
+    else
+        Callback()
+    end
+end
+
+function Context.Connect(Signal, Callback)
+    local Connection = Signal:Connect(function(...)
+        if Context.Alive then Callback(...) end
+    end)
+    Context.AddCleanup(function() Connection:Disconnect() end)
+    return Connection
+end
+
+local OriginalUnload = Library.Unload
+function Context.Destroy()
+    if not Context.Alive then return end
+    Context.Alive = false
+    for Index = #Cleanups, 1, -1 do
+        local Success, Error = pcall(Cleanups[Index])
+        if not Success then warn("roblox.buns cleanup failed: " .. tostring(Error)) end
+    end
+    table.clear(Cleanups)
+    if Environment.RobloxBunsContext == Context then Environment.RobloxBunsContext = nil end
+    OriginalUnload(Library)
+end
+Library.Unload = Context.Destroy
+Environment.RobloxBunsContext = Context
+
+function Context.LoadModule(Path, ModuleContext)
+    if not Context.Alive then return false end
+    local Source, Error = Download(MyFullUrl .. Path)
+    -- HttpGet can yield while this session is being unloaded or replaced.
+    if not Context.Alive then return false end
+    if not Source then
+        Context.Notify("Module download failed", Path .. ": " .. Error)
+        return false
+    end
+    local Initializer, LoadError = Execute(Source, Path)
+    if type(Initializer) ~= "function" then
+        Context.Notify("Module load failed", Path .. ": " .. tostring(LoadError or "expected an initializer function"))
+        return false
+    end
+    local Success, Result = pcall(Initializer, ModuleContext or Context)
+    if not Success then Context.Notify("Module initialization failed", Path .. ": " .. tostring(Result)) end
+    return Success
+end
+
+local Games = {
+    [4298676072] = { Folder = "RC2", Default = "4298676072.lua" },
+}
+
+local function Initialize()
+    local Window = Library:Window({ Name = "roblox.buns", SubName = GameName, Logo = Icon })
+    Context.Window = Window
+    local Dashboard = Window:DashboardPage({
+        Name = "Dashboard", Icon = "layout-dashboard",
+        WelcomeText = "WELCOME TO", HubName = "roblox.buns",
+        StatusText = "Ready", Badge = "PLAYER",
+        GameName = GameName, GameDescription = GameDescription,
+        Links = {
+            {
+                Icon = "copy", Tooltip = "Copy Discord to clipboard",
+                Callback = function()
+                    local Success = type(setclipboard) == "function" and pcall(setclipboard, "https://discord.gg/ys78VPnnJQ")
+                    Context.Notify(Success and "Copied" or "Clipboard unavailable",
+                        Success and "Discord link copied." or "Could not copy the Discord link.", 2)
+                end,
+            },
+        },
+        Stats = {
+            { Name = "TIME", Icon = "clock", GetValue = function() return os.date("%H:%M:%S") end },
+            { Name = "GAMETIME", Icon = "clock", GetValue = function()
+                return tostring(math.floor(workspace.DistributedGameTime)) .. "s"
+            end },
+        },
     })
+    Window:TabDivider()
+    Window:Category("Main")
+    Context.Pages.Main = Window:Page({ Name = "Main", Icon = "house" })
+    Window:Category("Game")
+    Context.Pages.Game = Window:Page({ Name = GameName, Icon = "gamepad-2" })
+    Context.Pages.Universal = Window:Page({ Name = "Universal", Icon = "globe" })
+    Context.Pages.PlayersList = Window:Page({ Name = "Players List", Icon = "users" })
+    Context.Pages.Scripts = Window:Page({ Name = "Scripts", Icon = "code" })
+    Window:TabDivider()
+
+    for _, Path in ipairs({ "main.lua", "universal.lua", "playerslist.lua", "scripts.lua" }) do
+        Context.LoadModule(Path)
+    end
+    local GameData = Games[GameId]
+    if GameData then
+        local Filename = GameData.Places and GameData.Places[PlaceId] or GameData.Default
+        Context.LoadModule("games/" .. GameData.Folder .. "/" .. Filename)
+    else
+        Context.Pages.Game:Section({ Name = "Support", Side = 1 }):Label("No game module is available for this game.")
+        Context.Notify("Unsupported game", "Universal controls are available. GameId: " .. tostring(GameId))
+    end
+    Context.LoadModule("settings.lua")
+    Dashboard:AddCard({ Name = "Main", Description = "Hub information and controls.", Icon = "house", Tab = Context.Pages.Main })
+    Dashboard:AddCard({ Name = "Universal", Description = "Player movement controls.", Icon = "globe", Tab = Context.Pages.Universal })
+    Dashboard:AddCard({ Name = "Players", Description = "Live server roster.", Icon = "users", Tab = Context.Pages.PlayersList })
 end
 
-Dashboard:AddCard({
-    Name = "Main", 
-    Description = "Toggles & sliders.", 
-    Icon = "house", 
-    Tab = MainPage,
-})
+local Success, Error = pcall(Initialize)
+if not Success then
+    warn("roblox.buns startup failed: " .. tostring(Error))
+    Context.Destroy()
+    return
+end
+return Context

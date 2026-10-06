@@ -1,7 +1,3 @@
-return function(ModuleContext)
-    local Library = ModuleContext.Library
-    local Window = ModuleContext.Window
-
-    local BaseSection = ModuleContext.Sections.Base
-
+return function(Context)
+    Context.Sections.Base:Label("Base tools are not configured.")
 end
