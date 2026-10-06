@@ -2,7 +2,7 @@ return function(ModuleContext)
     local Library = ModuleContext.Library
     local Window = ModuleContext.Window
 
-    local MainSection = ModuleContext.Main
+    local MainSection = ModuleContext.Sections.Main
 
     local Items = game:GetService("ReplicatedStorage").Content.Items
     local Ores = game:GetService("ReplicatedStorage").Content.Ores -- Needs to ignore bushes

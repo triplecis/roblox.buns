@@ -2,7 +2,7 @@ return function(ModuleContext)
     local Library = ModuleContext.Library
     local Window = ModuleContext.Window
 
-    local MiscSection = ModuleContext.Misc
+    local MiscSection = ModuleContext.Sections.Misc
 
     local ServerData = workspace.ServerData
     local CurrentCycle = ServerData.CurrentCycle

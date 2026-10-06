@@ -2,7 +2,7 @@ return function(ModuleContext)
     local Library = ModuleContext.Library
     local Window = ModuleContext.Window
 
-    local BuySection = ModuleContext.Buy
+    local BuySection = ModuleContext.Sections.Buy
 
     BuySection:Label("Purchase")
     BuySection:Button({
