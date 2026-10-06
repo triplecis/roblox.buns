@@ -210,6 +210,8 @@ end
 
 local UniversalScript = LoadScript("universal.lua")
 local PlayersListScript = LoadScript("playerslist.lua")
+local ScriptsScript = LoadScript("scripts.lua")
+local SettingsScript = LoadScript("settings.lua")
 
 if type(UniversalScript) == "function" then
     UniversalScript(Context)
@@ -219,9 +221,9 @@ if type(PlayersListScript) == "function" then
     PlayersListScript(Context)
 end
 
---// Settings //--
-
-local SettingsScript = LoadScript("settings.lua")
+if type(ScriptsScript) == "function" then
+    ScriptsScript(Context)
+end
 
 if type(SettingsScript) == "function" then
     SettingsScript(Context)
