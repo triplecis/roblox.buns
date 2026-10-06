@@ -2,7 +2,7 @@ return function(ContextV)
     local Library = ContextV.Library
     local Window = ContextV.Window
 
-    local MainSection = ContextV.MainSection
+    local MainSection = ContextV.Main
 
     --//
     --// Items game:GetService("ReplicatedStorage").Content.Items
