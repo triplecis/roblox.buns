@@ -7,7 +7,7 @@ return function(ModuleContext)
     local Items = game:GetService("ReplicatedStorage").Content.Items
     local Ores = game:GetService("ReplicatedStorage").Content.Ores -- Needs to ignore bushes
     local Trees = game:GetService("ReplicatedStorage").Content.Trees
-    local Fish = game:GetService("ReplicatedStorage").Content.Fishes -- Needs to ignore bushes
+    local Fish = game:GetService("ReplicatedStorage").Content.Items -- Needs to ignore invalid names and only get fishes
     local BigFish = game:GetService("ReplicatedStorage").Content.BigFish -- Needs to ignore bushes
    
     --//
