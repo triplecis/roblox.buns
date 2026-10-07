@@ -7,6 +7,7 @@ return function(Context)
     local Baselines, Applied = {}, {}
     local Enabled = { WalkSpeed = false, JumpPower = false, JumpHeight = false }
     local Values = { WalkSpeed = 16, JumpPower = 50, JumpHeight = 7.2 }
+    local WalkSpeedSuspended = false
 
     local function DisconnectCharacter()
         for _, Connection in ipairs(CharacterConnections) do Connection:Disconnect() end
@@ -15,6 +16,7 @@ return function(Context)
 
     local function Apply(Property)
         if not Humanoid or not Humanoid.Parent or not Enabled[Property] then return end
+        if Property == "WalkSpeed" and WalkSpeedSuspended then return end
         local Value = Values[Property]
         if Property == "WalkSpeed" then Value = Baselines.WalkSpeed * (1 + Value / 100) end
         -- Signals may be deferred; remember our writes rather than using a temporary guard.
@@ -31,6 +33,13 @@ return function(Context)
             Applied[Property] = Baselines[Property]
             Humanoid[Property] = Baselines[Property]
         end
+    end
+
+    function Context.SetWalkSpeedSuspended(State)
+        if WalkSpeedSuspended == State then return end
+        if State and Enabled.WalkSpeed then Restore("WalkSpeed") end
+        WalkSpeedSuspended = State
+        if not State and Context.Alive then Apply("WalkSpeed") end
     end
 
     local function UpdateStatus()

@@ -23,8 +23,9 @@ Available features:
 - A live server player roster with multiple selections.
 - RC2 ore, tree, fish, oil, and item catalogs with a refresh button.
 - RC2 server time from `workspace.ServerData.CurrentCycle.ClockTime`.
-- Huss Valley role rosters and spectating, native dash input and telemetry,
-  camera controls, catalog browsing, and public stat tracking.
+- Huss Valley role rosters and spectating, native dash/tackle input and telemetry,
+  profile sprint, local hitbox editing, camera controls, catalog browsing,
+  and public stat tracking.
 - Appearance, keybind, and config controls through the UI Settings page.
   Configs are stored under `roblox.buns/Configs/<GameId>`.
 
@@ -32,7 +33,8 @@ RC2 catalogs read the direct children of `ReplicatedStorage.Content` folders.
 Resource names containing `bush` (case insensitive) are excluded. Fish require
 matching names in both `BigFish` and `Items`. Oil definitions are read from
 an optional `Oils` folder. Missing folders produce empty lists; use
-**Refresh resources** after content arrives. These folder assumptions still
+**Refresh resources** to force a refresh. Catalogs also refresh automatically
+every two seconds and after replicated descendants change. These folder assumptions still
 need verification against the live game.
 
 World, vehicle, base, and automation tools are unfinished. The Buy section
@@ -46,9 +48,11 @@ Use these helpers to report loading failures and disconnect listeners on unload.
 RC2 modules also receive `Sections`, `Catalog`, and `Selections`.
 
 The [Huss Valley modules](games/HussValley/README.md) provide Rounds, Runners,
-Catchers, Movement, Abilities, Consumables, and Rewards sections with shared
+Catchers, Movement, Hitboxes, Abilities, Consumables, and Rewards sections with shared
 `State`. Native movement bindings are based on the supplied decompiled scripts;
-catalog and stat discovery still need live verification.
+catalog and stat discovery still need live verification. Huss Valley profiles,
+tackle data, and control gates update automatically; failed or stalled reads
+are isolated and retried. Lists retain selections when their contents are stable.
 
 Install the official [Luau CLI](https://github.com/luau-lang/luau/releases) and
 run the compile and regression checks from PowerShell:

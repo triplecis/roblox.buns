@@ -92,11 +92,12 @@ local function Fixture(Options)
         local Properties = {
             WalkSpeed = Speed or 16, JumpPower = Power or 50, JumpHeight = Height or 7.2,
             UseJumpPower = true, AutoRotate = true, Parent = true, Name = "Humanoid",
-            Health = 100, Sit = false, PlatformStand = false,
+            Health = 100, Sit = false, PlatformStand = false, FloorMaterial = "Ground",
         }
         local Signals = {}
         local Methods = {}
         function Methods:IsA(Class) return Class == "Humanoid" end
+        function Methods:GetChildren() return {} end
         function Methods:GetPropertyChangedSignal(Property)
             Signals[Property] = Signals[Property] or F:Signal(Options.Deferred)
             return Signals[Property]
@@ -147,9 +148,11 @@ local function Fixture(Options)
         Node("ServerData", "Folder", { Node("CurrentCycle", "Folder", { F.ClockTime }) }),
     })
     F.Workspace.DistributedGameTime = 10
+    F.ServerTime = 100
+    function F.Workspace:GetServerTimeNow() return F.ServerTime end
     F.Workspace.CurrentCamera = { CameraSubject = F.Hum, CameraType = "Custom", FieldOfView = 70 }
     F.Heartbeat = F:Signal()
-    F.InputService = { InputBegan = F:Signal() }
+    F.InputService = { InputBegan = F:Signal(), InputEnded = F:Signal(), WindowFocusReleased = F:Signal() }
     function F.InputService:GetFocusedTextBox() return self.FocusedTextBox end
     F.Marketplace = { Calls = 0 }
     function F.Marketplace:GetProductInfo()
@@ -235,7 +238,9 @@ local function Fixture(Options)
 
     F.Env = setmetatable({
         game = F.Game, workspace = F.Workspace,
-        Enum = { CameraType = { Custom = "Custom", Scriptable = "Scriptable" }, KeyCode = { V = "V" } },
+        Enum = { CameraType = { Custom = "Custom", Scriptable = "Scriptable" },
+            Material = { Air = "Air" },
+            KeyCode = { V = "V", LeftShift = "LeftShift", RightShift = "RightShift" } },
         getgenv = function() return F.Global end,
         warn = function(Message) table.insert(F.Warnings, Message) end,
     }, { __index = getfenv() })
@@ -248,6 +253,44 @@ local function Fixture(Options)
         F.RequireCalls = (F.RequireCalls or 0) + 1
         if Module.ModuleError then error(Module.ModuleError) end
         return Module.ModuleValue
+    end
+    local VectorMeta = { __type = "Vector3", __eq = function(A, B) return A.X == B.X and A.Y == B.Y and A.Z == B.Z end }
+    F.Env.typeof = function(Value)
+        local Meta = type(Value) == "table" and getmetatable(Value)
+        return Meta and Meta.__type or type(Value)
+    end
+    F.Spawned = {}
+    F.Env.task = { spawn = function(Callback)
+        local Thread = coroutine.create(Callback)
+        table.insert(F.Spawned, Thread)
+        local Success, Error = coroutine.resume(Thread)
+        assert(Success, Error)
+        return Thread
+    end }
+    F.Env.Vector3 = { new = function(X, Y, Z) return setmetatable({ X = X, Y = Y, Z = Z }, VectorMeta) end }
+    F.Env.Color3 = { fromRGB = function(R, G, B) return { R, G, B } end }
+    F.Boxes = {}
+    F.Env.Instance = { new = function(Class)
+        Equal(Class, "SelectionBox")
+        local Box = { ClassName = Class }
+        function Box:Destroy() self.Destroyed = true; self.Parent = nil end
+        table.insert(F.Boxes, Box)
+        return Box
+    end }
+    function F:EnableHooks()
+        self.Hooks = {}
+        self.Env.hookfunction = function(Target, Replacement)
+            local Entry = assert(self.Hooks[Target], "unregistered hook target")
+            local Previous = Entry.Current
+            Entry.Current = Replacement
+            return Previous
+        end
+    end
+    function F:Hookable(Callback)
+        local Entry = { Current = Callback }
+        local Target = function(...) return Entry.Current(...) end
+        self.Hooks[Target] = Entry
+        return Target
     end
     function F:Load()
         self.Lib = self:Library()
@@ -557,7 +600,7 @@ Test("Huss Valley loads without assuming game data exists", function()
     local F = Fixture({ GameId = 10764627709, NoContent = true, NoCharacter = true })
     local Context = assert(F:Load())
     F:NoModuleErrors()
-    Equal(F.Notifications[1].Description, "Loaded 8/8 modules.")
+    Equal(F.Notifications[1].Description, "Loaded 11/11 modules.")
     Equal(Context.HussValley.State.Snapshot.Role, "Unknown")
     Equal(Context.HussValley.State.Snapshot.Unknown, 2)
     Equal(#Context.HussValley.State.Catalogs.Abilities.Entries, 0)
@@ -752,6 +795,9 @@ local function HussMovementFixture()
     local Root = Node("HumanoidRootPart", "Part")
     Root.AssemblyLinearVelocity = { X = 0, Y = 0, Z = 0 }
     Root.Anchored = false
+    Root.Parent = F.Player.Character
+    Root.Size = F.Env.Vector3.new(2, 2, 1)
+    Root.CanCollide = false
     table.insert(F.Player.Character.Children, Root)
     F.Root = Root
     F.MovementFolder = Node("Movement")
@@ -762,6 +808,10 @@ local function HussMovementFixture()
         table.insert(self.MovementFolder.Children, Module)
         return Module
     end
+    F.ControlGate = F:AddModule("ControlGate", {
+        movementReason = function(Player) Equal(Player, F.Player); return F.MovementBlock end,
+        reason = function(Player) Equal(Player, F.Player); return F.InputBlock end,
+    })
     return F
 end
 
@@ -810,7 +860,7 @@ Test("Huss Valley reads native movement telemetry and frozen profiles", function
     F.Player.Attributes.GearSlow = true
     F.Heartbeat:Fire(0.5)
     Equal(HV.State.Snapshot.MovementProfile, Slowed)
-    Equal(F.RequireCalls, 1)
+    Equal(F.RequireCalls, 2) -- Automatic ControlGate discovery also loaded once.
     Near(Base.MaxSpeed, 24)
     A.DashCooldownUntil = os.clock() - 1
     F.Heartbeat:Fire(0.5)
@@ -901,6 +951,144 @@ Test("Huss Valley native module failures stay isolated", function()
     Context.Destroy()
 end)
 
+Test("Huss Valley discovers native Session data when it appears or changes", function()
+    local F = HussMovementFixture()
+    local Context = assert(F:Load())
+    local HV = Context.HussValley
+    Equal(HV.State.Snapshot.Session, nil)
+    local Session = Node("Session")
+    Session.Attributes = { Phase = "SelectHero", LeadUserId = 1, SelectedUserId = 2, GlobalPaused = true }
+    local GameRoot = F.Storage:FindFirstChild("ChickenOrHero")
+    table.insert(GameRoot.Children, Node("Game", "Folder", { Session }))
+    F.Heartbeat:Fire(0.5)
+    Equal(HV.State.Snapshot.Session.LeadUserId, 1)
+    Equal(HV.State.Snapshot.Movement.BlockReason, "GlobalPause")
+    assert(F:ContainsLabel("Phase: SelectHero | Session: paused"))
+    assert(table.find(F.Lib.Controls.HussValleyRoundInfo.Items, "Session.SelectedUserId = 2"))
+    Equal(F.RequireCalls, 1)
+    Session.Attributes.GlobalPaused = false
+    Session.Attributes.MapChanging = true
+    Session.Attributes.Phase = "Crossing"
+    F.Heartbeat:Fire(0.5)
+    Equal(HV.State.Snapshot.Movement.BlockReason, "MapChange")
+    assert(F:ContainsLabel("Phase: Crossing | Session: changing map"))
+    table.clear(GameRoot.Children)
+    F.Heartbeat:Fire(0.5)
+    Equal(HV.State.Snapshot.Session, nil)
+    Equal(HV.State.Snapshot.Movement.BlockReason, nil)
+    Context.Destroy()
+end)
+
+Test("Huss Valley displays frozen settings and touch timing without changing them", function()
+    local F = HussMovementFixture()
+    local Dash = table.freeze({ Mode = "RunBoost", Enabled = true, Distance = 10.8, Duration = 0.28,
+        Cooldown = 1.1, InputBuffer = 0.18, TouchInputBuffer = 0.32,
+        TurnInputGrace = 0.38, TouchTurnInputGrace = 0.55, MinIntentAngle = 35, TouchMinIntentAngle = 25 })
+    local Config = table.freeze({ MaxSpeed = 33.6, Acceleration = 36, JumpEnabled = false, Dash = Dash,
+        Camera = table.freeze({ MinZoom = 6, MaxZoom = 18 }) })
+    F:AddModule("MovementConfig", Config)
+    local Profile = table.freeze({ MaxSpeed = 35.616, Acceleration = 51.12, JumpEnabled = false, Dash = Dash })
+    F:AddModule("MovementProfiles", { get = function() return Profile end })
+    local Context = assert(F:Load())
+    local HV = Context.HussValley
+    Equal(F.RequireCalls, nil)
+    F.InputBlock = "Settings"
+    assert(HV.ReadMovementSettings())
+    assert(F:ContainsLabel("Input blocked: Settings"))
+    Equal(HV.State.Snapshot.MovementConfig, Config)
+    assert(F:ContainsLabel("Input buffer: 0.18s | Turn history: 0.38s | Intent angle: 35.00 degrees"))
+    assert(F:ContainsLabel("Profile jump: disabled"))
+    assert(table.find(F.Lib.Controls.HussValleyMovementDetails.Items, "Config.Camera.MinZoom = 6"))
+    F.Lib.Controls.HussValleyDashTouchInput:Set(true)
+    assert(F:ContainsLabel("Input buffer: 0.32s | Turn history: 0.55s | Intent angle: 25.00 degrees"))
+    assert(HV.ReadMovementProfile())
+    assert(table.find(HV.State.Snapshot.MovementDetails, "Profile.MaxSpeed = 35.616"))
+    F.Player.Character.Attributes.BoostRecoveryUntil = os.clock() + 60
+    F.Player.Character.Attributes.LastDashEntrySpeed = 24
+    F.Player.Character.Attributes.FacingPaceMultiplier = 0.85
+    F.InputBlock = nil
+    F.Heartbeat:Fire(0.5)
+    assert(HV.State.Snapshot.Movement.Recovery > 50)
+    Near(HV.State.Snapshot.Movement.LastDashEntrySpeed, 24)
+    assert(F:ContainsLabel("Input blocked: no"))
+    local Requires = F.RequireCalls
+    F.Heartbeat:Fire(0.5)
+    Equal(F.RequireCalls, Requires)
+    assert(table.isfrozen(Config) and table.isfrozen(Profile) and table.isfrozen(Dash))
+    Near(Config.MaxSpeed, 33.6)
+    Near(Dash.Cooldown, 1.1)
+    Context.Destroy()
+end)
+
+Test("Huss Valley dash respects session, native UI gates, and recovery", function()
+    local F = HussMovementFixture()
+    local Requested = 0
+    local Session = Node("Session")
+    table.insert(F.Storage:FindFirstChild("ChickenOrHero").Children, Node("Game", "Folder", { Session }))
+    local Input = { available = function() return true end, request = function() Requested += 1 end }
+    F:AddModule("BoostInput", Input)
+    local Context = assert(F:Load())
+    local HV, A = Context.HussValley, F.Player.Character.Attributes
+    for _, Attribute in ipairs({ "GlobalPaused", "MapChanging" }) do
+        Session.Attributes[Attribute] = true
+        Equal(HV.RequestDash(false), false)
+        Session.Attributes[Attribute] = false
+    end
+    F.Player.Attributes.Spectating = true
+    Equal(HV.RequestDash(false), false)
+    F.Player.Attributes.Spectating = false
+    Equal(F.RequireCalls, nil)
+    for _, Reason in ipairs({ "Settings", "TextInput", "ChoiceCamera", "RobloxMenu" }) do
+        F.InputBlock = Reason
+        Equal(HV.RequestDash(false), false)
+    end
+    F.InputBlock = nil
+    F.MovementBlock = "GlobalPause"
+    Equal(HV.RequestDash(false), false)
+    F.MovementBlock = nil
+    A.BoostRecoveryUntil = os.clock() + 60
+    Equal(HV.RequestDash(false), false)
+    A.BoostRecoveryUntil = os.clock() - 1
+    A.MovementState = "Boosting"
+    Equal(HV.RequestDash(false), false)
+    A.MovementState = "Running"
+    assert(HV.RequestDash(false))
+    Equal(Requested, 1)
+    Input.available = function() F.InputBlock = "Settings"; return true end
+    Equal(HV.RequestDash(false), false)
+    Equal(Requested, 1)
+    Context.Destroy()
+end)
+
+Test("Huss Valley ControlGate failures prevent input and recover on refresh", function()
+    local F = HussMovementFixture()
+    local Requested = 0
+    F:AddModule("BoostInput", { available = function() return true end, request = function() Requested += 1 end })
+    F:AddModule("MovementConfig", table.freeze({ MaxSpeed = 33.6, Dash = table.freeze({}) }))
+    local Gate = F.ControlGate.ModuleValue
+    local OriginalReason = Gate.reason
+    Gate.reason = function() error("gate failed") end
+    local Context = assert(F:Load())
+    local HV = Context.HussValley
+    Equal(HV.ReadMovementSettings(), false)
+    Equal(HV.RequestDash(false), false)
+    assert(F:ContainsLabel("Input blocked: check failed"))
+    Equal(Requested, 0)
+    Gate.reason = function() return false end
+    Equal(HV.RequestDash(false), false)
+    Gate.reason = OriginalReason
+    F.Heartbeat:Fire(0.5)
+    assert(F:ContainsLabel("Input blocked: no"))
+    assert(HV.RequestDash(false))
+    Equal(Requested, 1)
+    F.ControlGate.ModuleError = "cannot load gate"
+    Equal(HV.ReadMovementSettings(), false)
+    Equal(HV.RequestDash(false), false)
+    assert(F:ContainsLabel("Input blocked: check failed"))
+    Equal(Requested, 1)
+    Context.Destroy()
+end)
+
 Test("Huss Valley unload during require cancels pending dash input", function()
     local F = HussMovementFixture()
     local Requested = 0
@@ -916,6 +1104,466 @@ Test("Huss Valley unload during require cancels pending dash input", function()
     end
     Equal(Context.HussValley.RequestDash(false), false)
     Equal(Requested, 0)
+end)
+
+Test("Huss Valley sprint hooks frozen profiles and keeps Shift transitions stable", function()
+    local F = HussMovementFixture()
+    F:EnableHooks()
+    local Dash = table.freeze({ Cooldown = 1.1 })
+    local Base = table.freeze({ MaxSpeed = 30, Acceleration = 40, Deceleration = 60, Dash = Dash })
+    local Profiles = table.freeze({ get = F:Hookable(function() return Base end) })
+    F:AddModule("MovementProfiles", Profiles)
+    local Context = assert(F:Load())
+    local C = F.Lib.Controls
+    C.HussValleySprintEnabled:Set(true)
+    assert(Context.HussValley.State.Sprint.Enabled)
+    local Standing = Profiles.get("Runner", F.Player)
+    Near(Standing.MaxSpeed, 30)
+    F.InputService.InputBegan:Fire({ KeyCode = "LeftShift" }, false)
+    local Running = Profiles.get("Runner", F.Player)
+    Equal(Standing, Running)
+    Near(Running.MaxSpeed, 34.5)
+    Near(Running.Acceleration, 46)
+    Equal(Running.Dash, Dash)
+    Equal(Profiles.get("Runner", F.OtherPlayer), Base)
+    C.HussValleySprintIncrease:Set(50)
+    Equal(Profiles.get("Runner", F.Player), Running)
+    Near(Running.MaxSpeed, 45)
+    F.InputService.InputEnded:Fire({ KeyCode = "LeftShift" })
+    Equal(Profiles.get("Runner", F.Player), Running)
+    Near(Running.MaxSpeed, 30)
+    C.HussValleySprintAlways:Set(true)
+    Near(Profiles.get("Runner", F.Player).MaxSpeed, 45)
+    C.HussValleySprintEnabled:Set(false)
+    Equal(Profiles.get("Runner", F.Player), Base)
+    Near(Base.MaxSpeed, 30)
+    C.HussValleySprintEnabled:Set(true)
+    Context.Destroy()
+    Equal(Profiles.get("Runner", F.Player), Base)
+    Equal(F:ActiveConnections(), 0)
+end)
+
+Test("Huss Valley sprint ignores UI input, locks, lobby roles, and focus loss", function()
+    local F = HussMovementFixture()
+    local Base = table.freeze({ MaxSpeed = 30, Acceleration = 40 })
+    local Profiles = { get = function() return Base end }
+    F:AddModule("MovementProfiles", Profiles)
+    local Context = assert(F:Load())
+    F.Lib.Controls.HussValleySprintEnabled:Set(true)
+    F.InputService.InputBegan:Fire({ KeyCode = "LeftShift" }, true)
+    Near(Profiles.get("Runner", F.Player).MaxSpeed, 30)
+    F.InputService.InputBegan:Fire({ KeyCode = "RightShift" }, false)
+    Near(Profiles.get("Runner", F.Player).MaxSpeed, 34.5)
+    F.InputService.FocusedTextBox = {}
+    Near(Profiles.get("Runner", F.Player).MaxSpeed, 30)
+    F.InputService.FocusedTextBox = nil
+    F.Player.Character.Attributes.MovementLocked = true
+    Near(Profiles.get("Runner", F.Player).MaxSpeed, 30)
+    F.Player.Character.Attributes.MovementLocked = false
+    F.Player.Attributes.GameRole = "Lobby"
+    Near(Profiles.get("Lobby", F.Player).MaxSpeed, 30)
+    F.Player.Attributes.GameRole = "Runner"
+    F.InputService.WindowFocusReleased:Fire()
+    Near(Profiles.get("Runner", F.Player).MaxSpeed, 30)
+    Context.Destroy()
+    Equal(Profiles.get("Runner", F.Player), Base)
+end)
+
+Test("Huss Valley sprint pauses Universal speed and handles missing hooks", function()
+    local F = HussMovementFixture()
+    local Base = table.freeze({ MaxSpeed = 30, Acceleration = 40 })
+    local Get = function() return Base end
+    local Module = F:AddModule("MovementProfiles", table.freeze({ get = Get }))
+    local Context = assert(F:Load())
+    local C = F.Lib.Controls
+    C.WalkSpeedSlider:Set(50)
+    C.WalkSpeedToggle:Set(true)
+    Near(F.Hum.WalkSpeed, 24)
+    C.HussValleySprintEnabled:Set(true)
+    Equal(C.HussValleySprintEnabled.Value, false)
+    Equal(Context.HussValley.State.Sprint.Enabled, false)
+    Near(F.Hum.WalkSpeed, 24)
+    Module.ModuleValue = { get = Get }
+    C.HussValleySprintEnabled:Set(true)
+    Near(F.Hum.WalkSpeed, 16)
+    F.Hum.WalkSpeed = 30
+    Near(F.Hum.WalkSpeed, 30)
+    C.HussValleySprintEnabled:Set(false)
+    Near(F.Hum.WalkSpeed, 45)
+    C.WalkSpeedToggle:Set(false)
+    Near(F.Hum.WalkSpeed, 30)
+    Context.Destroy()
+end)
+
+Test("Huss Valley unload during sprint module load cancels installation", function()
+    local F = HussMovementFixture()
+    local Base = table.freeze({ MaxSpeed = 30, Acceleration = 40 })
+    local Profiles = { get = function() return Base end }
+    local Original = Profiles.get
+    F:AddModule("MovementProfiles", Profiles)
+    local Context = assert(F:Load())
+    local Require = F.Env.require
+    F.Env.require = function(Module) Context.Destroy(); return Require(Module) end
+    F.Lib.Controls.HussValleySprintEnabled:Set(true)
+    Equal(Profiles.get, Original)
+    Equal(Context.HussValley.State.Sprint.Enabled, false)
+end)
+
+local function OtherHitbox(F, Size)
+    local Part = Node("HumanoidRootPart", "Part")
+    Part.Size = Size or F.Env.Vector3.new(2, 2, 1)
+    Part.CanCollide = true
+    F.OtherPlayer.Character = F:Character(F:Humanoid())
+    table.insert(F.OtherPlayer.Character.Children, Part)
+    Part.Parent = F.OtherPlayer.Character
+    return Part
+end
+
+Test("Huss Valley edits discovered hitbox parts and restores selection and previews", function()
+    local F = HussMovementFixture()
+    local Other = OtherHitbox(F)
+    local Original = Other.Size
+    local Context = assert(F:Load())
+    local C = F.Lib.Controls
+    Equal(Other.Size, Original)
+    C.HussValleyHitboxesEnabled:Set(true)
+    Equal(Other.Size, F.Env.Vector3.new(6, 6, 6))
+    Equal(Other.CanCollide, false)
+    Equal(F.Root.Size, F.Env.Vector3.new(2, 2, 1))
+    Equal(#F.Boxes, 1)
+    Equal(F.Boxes[1].Adornee, Other)
+    C.HussValleyHitboxSizeX:Set(8)
+    Near(Other.Size.X, 8)
+    C.HussValleyHitboxNonColliding:Set(false)
+    Equal(Other.CanCollide, true)
+    C.HussValleyHitboxPreview:Set(false)
+    assert(F.Boxes[1].Destroyed)
+    C.HussValleyHitboxIncludeSelf:Set(true)
+    Near(F.Root.Size.X, 8)
+    C.HussValleyHitboxParts:Set({})
+    Equal(Other.Size, Original)
+    Equal(F.Root.Size, F.Env.Vector3.new(2, 2, 1))
+    Equal(Context.HussValley.State.Hitboxes.EditedParts, 0)
+    C.HussValleyHitboxParts:Set({ "HumanoidRootPart" })
+    Context.Destroy()
+    Equal(Other.Size, Original)
+    Equal(Other.CanCollide, true)
+    Equal(F.Root.Size, F.Env.Vector3.new(2, 2, 1))
+    Equal(F:ActiveConnections(), 0)
+end)
+
+Test("Huss Valley hitboxes follow respawns, filter players, and preserve game updates", function()
+    local F = HussMovementFixture()
+    local Old = OtherHitbox(F)
+    local Original = Old.Size
+    local Context = assert(F:Load())
+    local C = F.Lib.Controls
+    C.HussValleyHitboxesEnabled:Set(true)
+    C.HussValleyHitboxAllOthers:Set(false)
+    Equal(Old.Size, Original)
+    local Label = "Other Player (@OtherUser) [2]"
+    C.HussValleyHitboxPlayers:Set({ Label })
+    Near(Old.Size.X, 6)
+    local New = OtherHitbox(F)
+    F.Heartbeat:Fire(0.5)
+    Equal(Old.Size, Original)
+    Near(New.Size.X, 6)
+    New.Size = F.Env.Vector3.new(3, 4, 2)
+    F.Heartbeat:Fire(0.5)
+    Near(New.Size.X, 6)
+    C.HussValleyHitboxesEnabled:Set(false)
+    Equal(New.Size, F.Env.Vector3.new(3, 4, 2))
+    C.HussValleyHitboxesEnabled:Set(true)
+    New.Size = F.Env.Vector3.new(4, 5, 3)
+    Context.Destroy()
+    Equal(New.Size, F.Env.Vector3.new(4, 5, 3))
+    for _, Box in ipairs(F.Boxes) do assert(Box.Destroyed) end
+end)
+
+local function HussTackleFixture(Hooked, BoundsValue)
+    local F = HussMovementFixture()
+    F.Player.Attributes.GameRole = "Catcher"
+    F.Player.Attributes.RunState = "Active"
+    F.GameFolder = Node("Game")
+    table.insert(F.Storage:FindFirstChild("ChickenOrHero").Children, F.GameFolder)
+    function F:AddGameModule(Name, Value)
+        local Module = Node(Name, "ModuleScript")
+        Module.ModuleValue = Value
+        table.insert(self.GameFolder.Children, Module)
+        return Module
+    end
+    F.BaseTackle = table.freeze({ Variants = table.freeze({}), Cooldown = 1.2 })
+    F.SlowTackle = table.freeze({ Name = "Standing", Distance = 4, Duration = 0.2, Recovery = 0.4 })
+    F.FastTackle = table.freeze({ Name = "Running", Distance = 10, Duration = 0.3, Recovery = 0.5 })
+    F:AddModule("MovementProfiles", { get = function(Role, Player)
+        Equal(Role, "Catcher"); Equal(Player, F.Player)
+        return { MaxSpeed = F.Player.Attributes.GearSlow and 20 or 40, Acceleration = 36 }
+    end })
+    F:AddGameModule("GameConfig", table.freeze({ Tackle = F.BaseTackle }))
+    F:AddGameModule("TackleProfile", table.freeze({ select = function(Config, Speed, MaxSpeed)
+        Equal(Config, F.BaseTackle)
+        F.LastSelection = { Speed = Speed, MaxSpeed = MaxSpeed }
+        return Speed >= 10 and F.FastTackle or F.SlowTackle
+    end }))
+    F:AddGameModule("TackleMotion", table.freeze({ distance = function(Profile, Time)
+        Near(Time, Profile.Duration); return Profile.Distance
+    end }))
+    F:AddGameModule("TacklePredictionConfig", table.freeze({ EntrySpeedTolerance = 2, ConfirmTimeout = 0.9 }))
+    F.BaseBounds = BoundsValue or F.Env.Vector3.new(2, 3, 4)
+    local Bounds = function(Kind) return Kind == "Tackle" and F.BaseBounds or F.Env.Vector3.new(1, 1, 1) end
+    if Hooked then F:EnableHooks(); Bounds = F:Hookable(Bounds) end
+    F.Replay = Hooked and table.freeze({ bounds = Bounds }) or { bounds = Bounds }
+    F:AddGameModule("HitReplayMath", F.Replay)
+    F.Requested = 0
+    F.Remaining = 0
+    F.Prediction = {
+        remaining = function() return F.Remaining end,
+        request = function()
+            F.Requested += 1
+            F.Player.Character.Attributes.TackleActive = true
+            F.Player.Character.Attributes.TackleVariant = "Running"
+            return F.Accepted ~= false
+        end,
+    }
+    F:AddGameModule("TacklePrediction", F.Prediction)
+    return F
+end
+
+Test("Huss Valley tackle settings refresh live variants, gear speed, and server-clock cooldown", function()
+    local F = HussTackleFixture()
+    F.Player.Attributes.TackleReadyAt = F.ServerTime + 0.6
+    local Context = assert(F:Load())
+    local HV = Context.HussValley
+    Equal(F.RequireCalls, nil)
+    F.Heartbeat:Fire(0.25)
+    Equal(HV.State.Tackle.Profile, F.SlowTackle)
+    Near(HV.State.Tackle.Remaining, 0.6)
+    Near(HV.State.Tackle.MotionDistance, 4)
+    assert(table.find(F.Lib.Controls.HussValleyTackleDetails.Items, "Prediction.EntrySpeedTolerance = 2"))
+    assert(F:ContainsLabel("Tackle prediction size: 2.00 x 3.00 x 4.00 studs"))
+    local Requires = F.RequireCalls
+    F.Root.AssemblyLinearVelocity = { X = 12, Y = 50, Z = 0 }
+    F.Player.Attributes.GearSlow = true
+    F.ServerTime += 0.5
+    F.Heartbeat:Fire(0.25)
+    Equal(HV.State.Tackle.Profile, F.FastTackle)
+    Near(F.LastSelection.Speed, 12)
+    Near(F.LastSelection.MaxSpeed, 20)
+    Near(HV.State.Tackle.Remaining, 0.1)
+    Equal(F.RequireCalls, Requires)
+    Context.Destroy()
+end)
+
+Test("Huss Valley native tackle honors roles, physical state, dagger, UI, and cooldown", function()
+    local F = HussTackleFixture()
+    local Context = assert(F:Load())
+    local HV = Context.HussValley
+    F.Player.Attributes.GameRole = "Runner"
+    Equal(HV.RequestTackle(), false)
+    Equal(F.RequireCalls, nil)
+    F.Player.Attributes.GameRole = "Catcher"
+    F.Player.Attributes.RunState = "Lobby"
+    Equal(HV.RequestTackle(), false)
+    F.Player.Attributes.RunState = "Active"
+    F.Hum.FloorMaterial = "Air"
+    Equal(HV.RequestTackle(), false)
+    F.Hum.FloorMaterial = "Ground"
+    F.Player.Character.Attributes.DaggerEquipped = true
+    F.Player.Character.Attributes.DaggerState = "Drawing"
+    Equal(HV.RequestTackle(), false)
+    F.Player.Character.Attributes.DaggerState = "Held"
+    F.Player.Attributes.TackleReadyAt = F.ServerTime + 0.1
+    Equal(HV.RequestTackle(), false)
+    F.Player.Attributes.TackleReadyAt = F.ServerTime
+    F.Remaining = 0.1
+    Equal(HV.RequestTackle(), false)
+    F.Remaining = 0
+    F.InputBlock = "ChoiceCamera"
+    Equal(HV.RequestTackle(), false)
+    F.InputBlock = nil
+    assert(HV.RequestTackle())
+    Equal(F.Requested, 1)
+    assert(HV.State.Tackle.Active)
+    Equal(HV.RequestTackle(), false)
+    Context.Destroy()
+    Equal(HV.RequestTackle(), false)
+end)
+
+Test("Huss Valley tackle native failures and unloads cancel action", function()
+    local F = HussTackleFixture()
+    local Context = assert(F:Load())
+    local HV = Context.HussValley
+    F.Prediction.remaining = function() error("timer failed") end
+    Equal(HV.RequestTackle(), false)
+    Equal(F.Requested, 0)
+    F.Prediction.remaining = function() return 0 end
+    F.Prediction.request = function() error("native request failed") end
+    Equal(HV.RequestTackle(), false)
+    Equal(F.Requested, 0)
+    F.Prediction.remaining = function() Context.Destroy(); return 0 end
+    Equal(HV.RequestTackle(), false)
+    Equal(F.Requested, 0)
+end)
+
+Test("Huss Valley prediction box hooks only verified vector tackle bounds and restores", function()
+    local F = HussTackleFixture(true)
+    local Context = assert(F:Load())
+    local C = F.Lib.Controls
+    C.HussValleyTackleBoxEnabled:Set(true)
+    assert(Context.HussValley.State.Tackle.BoxEnabled)
+    C.HussValleyTackleBoxX:Set(2)
+    C.HussValleyTackleBoxY:Set(1.5)
+    Equal(F.Replay.bounds("Tackle", F.FastTackle), F.Env.Vector3.new(4, 4.5, 4))
+    Equal(F.Replay.bounds("Knife", F.FastTackle), F.Env.Vector3.new(1, 1, 1))
+    Equal(F.BaseBounds, F.Env.Vector3.new(2, 3, 4))
+    C.HussValleyTackleBoxEnabled:Set(false)
+    Equal(F.Replay.bounds("Tackle", F.FastTackle), F.BaseBounds)
+    C.HussValleyTackleBoxEnabled:Set(true)
+    Context.Destroy()
+    Equal(F.Replay.bounds("Tackle", F.FastTackle), F.BaseBounds)
+end)
+
+Test("Huss Valley prediction box refuses unknown schemas and missing frozen hooks", function()
+    local F = HussTackleFixture(false, { Size = { X = 2, Y = 3, Z = 4 } })
+    local Context = assert(F:Load())
+    F.Lib.Controls.HussValleyTackleBoxEnabled:Set(true)
+    Equal(F.Lib.Controls.HussValleyTackleBoxEnabled.Value, false)
+    Equal(Context.HussValley.State.Tackle.BoxEnabled, false)
+    Equal(F.Replay.bounds("Tackle"), F.BaseBounds)
+    Context.Destroy()
+    local Frozen = HussTackleFixture()
+    Frozen.Replay = table.freeze(Frozen.Replay)
+    local FrozenContext = assert(Frozen:Load())
+    Frozen.Lib.Controls.HussValleyTackleBoxEnabled:Set(true)
+    Equal(Frozen.Lib.Controls.HussValleyTackleBoxEnabled.Value, false)
+    Equal(FrozenContext.HussValley.State.Tackle.BoxEnabled, false)
+    FrozenContext.Destroy()
+end)
+
+Test("Huss Valley replaced or removed tackle bindings restore the active box hook", function()
+    local F = HussTackleFixture()
+    local Context = assert(F:Load())
+    local C = F.Lib.Controls
+    C.HussValleyTackleBoxEnabled:Set(true)
+    C.HussValleyTackleBoxX:Set(2)
+    local OldReplay = F.Replay
+    local OldModule = F.GameFolder:FindFirstChild("HitReplayMath")
+    table.remove(F.GameFolder.Children, assert(table.find(F.GameFolder.Children, OldModule)))
+    local NewBounds = F.Env.Vector3.new(3, 3, 3)
+    F:AddGameModule("HitReplayMath", { bounds = function() return NewBounds end })
+    F.Heartbeat:Fire(0.25)
+    Equal(Context.HussValley.State.Tackle.BoxEnabled, false)
+    Equal(C.HussValleyTackleBoxEnabled.Value, false)
+    Equal(OldReplay.bounds("Tackle"), F.BaseBounds)
+    Equal(Context.HussValley.State.Tackle.Bounds, NewBounds)
+    C.HussValleyTackleBoxEnabled:Set(true)
+    local GameConfig = F.GameFolder:FindFirstChild("GameConfig")
+    table.remove(F.GameFolder.Children, assert(table.find(F.GameFolder.Children, GameConfig)))
+    F.Heartbeat:Fire(0.25)
+    Equal(Context.HussValley.State.Tackle.BoxEnabled, false)
+    Equal(Context.HussValley.State.Tackle.Bounds, nil)
+    Context.Destroy()
+end)
+
+Test("Huss Valley replicated descendant signals refresh catalogs before the polling interval", function()
+    local F = HussMovementFixture()
+    F.Storage.DescendantAdded = F:Signal()
+    F.Storage.DescendantRemoving = F:Signal()
+    local Context = assert(F:Load())
+    F.Heartbeat:Fire(0.25)
+    local Consumables = Node("Consumables", "Folder", { Node("Banana", "ModuleScript") })
+    table.insert(F.Storage.Children, Consumables)
+    F.Storage.DescendantAdded:Fire(Consumables)
+    F.Heartbeat:Fire(0.25)
+    Equal(#F.Lib.Controls.HussValleySelectedConsumables.Items, 1)
+    table.clear(Consumables.Children)
+    F.Storage.DescendantRemoving:Fire(Consumables)
+    F.Heartbeat:Fire(0.25)
+    Equal(#F.Lib.Controls.HussValleySelectedConsumables.Items, 0)
+    Context.Destroy()
+    Equal(F:ActiveConnections(), 0)
+end)
+
+Test("Huss Valley automatically discovers late movement data and catalog changes", function()
+    local F = HussMovementFixture()
+    local Context = assert(F:Load())
+    local HV, C = Context.HussValley, F.Lib.Controls
+    F.Heartbeat:Fire(0.25)
+    Equal(HV.State.Snapshot.MovementProfile, nil)
+    local Module = F:AddModule("MovementProfiles", { get = function()
+        return { MaxSpeed = 30, Acceleration = 40 }
+    end })
+    Module.ModuleError = "loading failed"
+    F:AddModule("MovementConfig", { MaxSpeed = 30, Dash = { Distance = 10, Duration = 0.28, Cooldown = 1.1 } })
+    F.Heartbeat:Fire(0.25)
+    Equal(HV.State.Snapshot.MovementProfile, nil)
+    Module.ModuleError = nil
+    F.Heartbeat:Fire(0.5)
+    Near(HV.State.Snapshot.MovementProfile.MaxSpeed, 30)
+    F.Heartbeat:Fire(0.25)
+    Near(HV.State.Snapshot.MovementConfig.MaxSpeed, 30)
+    local Abilities = Node("Abilities", "Folder", { Node("Cloak", "ModuleScript") })
+    table.insert(F.Storage.Children, Abilities)
+    F.Heartbeat:Fire(2)
+    Equal(#C.HussValleySelectedAbilities.Items, 1)
+    C.HussValleySelectedAbilities:Set(table.clone(C.HussValleySelectedAbilities.Items))
+    local Refreshes = C.HussValleySelectedAbilities.Refreshes
+    F.Heartbeat:Fire(2)
+    Equal(C.HussValleySelectedAbilities.Refreshes, Refreshes)
+    Equal(#C.HussValleySelectedAbilities.Value, 1)
+    table.clear(Abilities.Children)
+    F.Heartbeat:Fire(2)
+    Equal(#C.HussValleySelectedAbilities.Items, 0)
+    Equal(#C.HussValleySelectedAbilities.Value, 0)
+    Context.Destroy()
+end)
+
+Test("Huss Valley live workers isolate failing panels and stalled module reads", function()
+    local F = HussMovementFixture()
+    local Context = assert(F:Load())
+    local HV = Context.HussValley
+    local Calls, Healthy, ProfileCalls = 0, 0, 0
+    HV.Subscribe(function() Calls += 1; error("panel failed") end, "Broken test panel")
+    HV.Subscribe(function() Healthy += 1 end, "Healthy test panel")
+    local Notifications = #F.Notifications
+    F:AddModule("MovementProfiles", { get = function()
+        ProfileCalls += 1
+        coroutine.yield()
+        return { MaxSpeed = 30, Acceleration = 40 }
+    end })
+    F.Player.Attributes.GameRole = "Catcher"
+    F.Heartbeat:Fire(0.25)
+    Equal(HV.State.Snapshot.Role, "Chasers")
+    F.Player.Attributes.GameRole = "Runner"
+    F.Heartbeat:Fire(0.25)
+    Equal(HV.State.Snapshot.Role, "Runners")
+    assert(Calls >= 3 and Healthy >= 3)
+    Equal(ProfileCalls, 1)
+    Equal(#F.Notifications, Notifications)
+    Context.Destroy()
+    for _, Thread in ipairs(F.Spawned) do
+        if coroutine.status(Thread) == "suspended" then assert(coroutine.resume(Thread)) end
+    end
+    Equal(HV.State.MovementProfile, nil)
+    Equal(F:ActiveConnections(), 0)
+end)
+
+Test("RC2 catalogs and player display names refresh automatically without selection loss", function()
+    local F = Fixture()
+    local Context = assert(F:Load())
+    local C = F.Lib.Controls
+    C.SelectedPlayers:Set({ "Other Player (@OtherUser)" })
+    F.OtherPlayer.DisplayName = "Renamed Player"
+    table.insert(F.Content:FindFirstChild("Ores").Children, Node("Gold"))
+    F.Heartbeat:Fire(2)
+    assert(table.find(C.SelectedOres.Items, "Gold"))
+    Equal(C.SelectedPlayers.Value[1], "Renamed Player (@OtherUser)")
+    Equal(Context.SelectedPlayers[1], F.OtherPlayer)
+    local ResourceRefreshes, PlayerRefreshes = C.SelectedOres.Refreshes, C.SelectedPlayers.Refreshes
+    F.Heartbeat:Fire(2)
+    Equal(C.SelectedOres.Refreshes, ResourceRefreshes)
+    Equal(C.SelectedPlayers.Refreshes, PlayerRefreshes)
+    Context.Destroy()
 end)
 
 print(string.format("%d regression tests passed.", Passed))

@@ -6,10 +6,40 @@ return function(Context)
     local CameraBackup
     local Elapsed = 0
     local MovementModules = {}
+    local GameModules = {}
+    local Watches = {}
+    local Clock = 0
     Context.State.Catalogs = {
         Abilities = { Entries = {}, Sources = {} },
         Consumables = { Entries = {}, Sources = {} },
     }
+
+    local function RunLive(Entry, Callback)
+        if Entry.Running or not Context.Alive then return end
+        Entry.Running = true
+        task.spawn(function()
+            if Context.Alive then
+                local Success, Error = pcall(Callback)
+                if not Success then
+                    local Message = tostring(Error)
+                    if Entry.Error ~= Message then Context.Notify("Live update failed", Entry.Name .. ": " .. Message, 3) end
+                    Entry.Error = Message
+                else Entry.Error = nil end
+            end
+            Entry.Running = false
+        end)
+    end
+
+    function Context.WatchData(Name, Callback, Interval)
+        local Entry = { Name = Name, Callback = Callback, Interval = Interval or 0.5, NextAt = 0 }
+        table.insert(Watches, Entry)
+        return Entry
+    end
+
+    local function Deliver(Entry, Snapshot)
+        Entry.Latest = Snapshot
+        RunLive(Entry, function() Entry.Callback(Entry.Latest) end)
+    end
 
     local function Normalize(Value)
         return type(Value) == "string" and string.lower(Value):gsub("[^%w]", "") or ""
@@ -48,33 +78,99 @@ return function(Context)
         return nil
     end
 
-    local function MovementModule(Name, Force)
+    local function Session()
         local GameRoot = Storage:FindFirstChild("ChickenOrHero")
-        local Movement = GameRoot and GameRoot:FindFirstChild("Movement")
-        local Module = Movement and Movement:FindFirstChild(Name)
+        local GameFolder = GameRoot and GameRoot:FindFirstChild("Game")
+        return GameFolder and GameFolder:FindFirstChild("Session")
+    end
+
+    local function SessionMovementReason()
+        local Data = Attributes(Session())
+        if Data.GlobalPaused == true then return "GlobalPause" end
+        if Data.MapChanging == true then return "MapChange" end
+        if Attributes(Context.Player).Spectating == true then return "Spectating" end
+        return nil
+    end
+
+    local function Remaining(Deadline, Duration)
+        local Until = Number(Deadline)
+        local Seconds = Until and (Until - os.clock()) or Number(Duration)
+        return Seconds and math.max(0, Seconds)
+    end
+
+    local function NativeModule(FolderName, Modules, Name, Force)
+        local GameRoot = Storage:FindFirstChild("ChickenOrHero")
+        local Folder = GameRoot and GameRoot:FindFirstChild(FolderName)
+        local Module = Folder and Folder:FindFirstChild(Name)
         if not Module or not Module:IsA("ModuleScript") then
+            Modules[Name] = nil
             return nil, Name .. " is unavailable."
         end
-        local Cached = MovementModules[Name]
+        local Cached = Modules[Name]
         if Cached and Cached.Instance == Module and not Force then return Cached.Value end
         local Success, Value = pcall(require, Module)
         if not Success or type(Value) ~= "table" then
+            Modules[Name] = nil
             return nil, Name .. " could not load: " .. tostring(Value)
         end
-        MovementModules[Name] = { Instance = Module, Value = Value }
+        Modules[Name] = { Instance = Module, Value = Value }
         return Value
     end
 
-    local function ReadProfile(Force)
+    local function MovementModule(Name, Force)
+        return NativeModule("Movement", MovementModules, Name, Force)
+    end
+
+    function Context.ReadGameModule(Name, Force)
+        if not Context.Alive then return nil, "Session unloaded." end
+        return NativeModule("Game", GameModules, Name, Force)
+    end
+
+    local function ReadGates(Force)
+        local Gate, Error = MovementModule("ControlGate", Force)
+        local Result = { Checked = false, Error = Error }
+        if not Context.Alive then return Result end
+        if not Gate then return Result end
+        for _, Entry in ipairs({ { "movementReason", "MovementReason" }, { "reason", "InputReason" } }) do
+            if type(Gate[Entry[1]]) ~= "function" then
+                Result.Error = "ControlGate." .. Entry[1] .. " is unavailable."
+                return Result
+            end
+            local Success, Reason = pcall(Gate[Entry[1]], Context.Player)
+            if not Context.Alive then return Result end
+            if not Success or (Reason ~= nil and type(Reason) ~= "string") then
+                Result.Error = "ControlGate." .. Entry[1] .. " failed: " .. tostring(Reason)
+                return Result
+            end
+            Result[Entry[2]] = Reason
+        end
+        Result.Checked = true
+        return Result
+    end
+
+    function Context.CheckControlGates()
+        if not Context.Alive then return { Checked = false, Error = "Session unloaded." } end
+        local Gates = ReadGates(false)
+        if Context.Alive then Context.State.ControlGates = Gates end
+        return Gates
+    end
+
+    local function ReadProfile(Force, Role)
         local Profiles, Error = MovementModule("MovementProfiles", Force)
+        if not Context.Alive then return nil, "Session unloaded." end
         if not Profiles then return nil, Error end
         if type(Profiles.get) ~= "function" then return nil, "MovementProfiles.get is unavailable." end
-        local Success, Profile = pcall(Profiles.get, Attributes(Context.Player).GameRole, Context.Player)
+        local Success, Profile = pcall(Profiles.get, Role or Attributes(Context.Player).GameRole, Context.Player)
         if not Success or type(Profile) ~= "table" then return nil, "Could not read movement profile: " .. tostring(Profile) end
         if not Number(Profile.MaxSpeed) or not Number(Profile.Acceleration) then
             return nil, "MovementProfiles returned an invalid speed profile."
         end
         return Profile
+    end
+
+    function Context.GetMovementProfile(Role)
+        if not Context.Alive then return nil, "Session unloaded." end
+        return ReadProfile(false, Role)
     end
 
     function Context.ReadMovementProfile()
@@ -88,12 +184,29 @@ return function(Context)
         return Profile ~= nil
     end
 
-    function Context.RequestDash(TouchStyle)
+    function Context.ReadMovementSettings()
         if not Context.Alive then return false end
-        local Character = Context.Player.Character
+        local Config, Error = MovementModule("MovementConfig", true)
+        if not Context.Alive then return false end
+        if Config and (not Number(Config.MaxSpeed) or type(Config.Dash) ~= "table") then
+            Config, Error = nil, "MovementConfig returned invalid movement settings."
+        end
+        Context.State.MovementConfig = Config
+        Context.State.MovementConfigError = Error
+        local Gates = ReadGates(true)
+        if not Context.Alive then return false end
+        Context.State.ControlGates = Gates
+        if Error or Gates.Error then Context.Notify("Movement settings unavailable", Error or Gates.Error, 3) end
+        Context.RefreshData()
+        return Config ~= nil and Gates.Checked
+    end
+
+    local function DashBlockReason(Character)
+        if Context.Player.Character ~= Character then return "Character changed; request dash again." end
         local Human = Humanoid(Context.Player)
         local Root = Character and Character:FindFirstChild("HumanoidRootPart")
         local CharacterAttributes = Attributes(Character)
+        local Recovery = Remaining(CharacterAttributes.BoostRecoveryUntil)
         local Reason
         if Attributes(Context.Player).GameRole == "Catcher" then
             Reason = "Catchers do not have the Runner dash."
@@ -105,10 +218,27 @@ return function(Context)
             Reason = CharacterAttributes.MovementBlockReason or CharacterAttributes.MovementLockReason or "Movement is locked."
         elseif CharacterAttributes.DashReady == false then
             Reason = "Dash is not ready."
+        elseif Recovery and Recovery > 0 then
+            Reason = "Dash is recovering."
+        elseif CharacterAttributes.MovementState == "Boosting" or CharacterAttributes.MovementState == "Dashing" then
+            Reason = "Dash is already active."
         end
-        local Until = Number(CharacterAttributes.DashCooldownUntil)
-        local Cooldown = Until and (Until - os.clock()) or Number(CharacterAttributes.DashCooldown)
+        local Cooldown = Remaining(CharacterAttributes.DashCooldownUntil, CharacterAttributes.DashCooldown)
         if not Reason and Cooldown and Cooldown > 0 then Reason = "Dash is cooling down." end
+        if not Reason then Reason = SessionMovementReason() end
+        if not Reason and Context.State.Spectating then Reason = "Stop spectating before requesting dash." end
+        return Reason
+    end
+
+    function Context.RequestDash(TouchStyle)
+        if not Context.Alive then return false end
+        local Character = Context.Player.Character
+        local Reason = DashBlockReason(Character)
+        if Reason then Context.Notify("Dash unavailable", Reason, 3); return false end
+        local Gates = ReadGates(false)
+        if not Context.Alive then return false end
+        Context.State.ControlGates = Gates
+        Reason = Gates.Error or Gates.MovementReason or Gates.InputReason
         if Reason then Context.Notify("Dash unavailable", Reason, 3); return false end
         local Input, Error = MovementModule("BoostInput")
         if not Context.Alive then return false end
@@ -122,6 +252,12 @@ return function(Context)
             Context.Notify("Dash unavailable", Checked and "The game is blocking dash input." or tostring(Available), 3)
             return false
         end
+        -- Native callbacks can yield; recheck the session and input gate before queuing.
+        Gates = ReadGates(false)
+        if not Context.Alive then return false end
+        Context.State.ControlGates = Gates
+        Reason = DashBlockReason(Character) or Gates.Error or Gates.MovementReason or Gates.InputReason
+        if Reason then Context.Notify("Dash unavailable", Reason, 3); return false end
         -- The existing movement controller consumes this buffered request and handles the remote.
         local Requested, RequestError = pcall(Input.request, TouchStyle == true)
         if not Requested then Context.Notify("Dash request failed", RequestError, 3) end
@@ -205,12 +341,30 @@ return function(Context)
         end
     end
 
+    local function SettingsRows(Settings, Prefix, Rows, Depth)
+        if type(Settings) ~= "table" or Depth > 2 then return end
+        for Name, Value in pairs(Settings) do
+            if type(Value) == "table" then
+                SettingsRows(Value, Prefix .. "." .. tostring(Name), Rows, Depth + 1)
+            elseif type(Value) ~= "function" then
+                table.insert(Rows, Prefix .. "." .. tostring(Name) .. " = " .. tostring(Value))
+            end
+        end
+    end
+
+    function Context.DescribeSettings(Settings, Prefix)
+        local Rows = {}
+        SettingsRows(Settings, Prefix, Rows, 0)
+        table.sort(Rows)
+        return Rows
+    end
+
     function Context.RefreshData()
         if not Context.Alive then return Context.State.Snapshot end
         local Snapshot = {
             Runners = {}, Chasers = {}, Unknown = 0,
             Role = Context.GetRole(Context.Player),
-            RoundInfo = {}, AbilityInfo = {}, ConsumableInfo = {}, Stats = {}, Tools = {},
+            RoundInfo = {}, AbilityInfo = {}, ConsumableInfo = {}, Stats = {}, Tools = {}, MovementDetails = {},
             Catalogs = Context.State.Catalogs,
             ServerSeconds = math.floor(workspace.DistributedGameTime),
             GameRole = Attributes(Context.Player).GameRole,
@@ -229,6 +383,11 @@ return function(Context)
 
         for _, Info in ipairs({ { workspace, "Workspace" }, { Storage, "ReplicatedStorage" }, { Context.Player, "Player" } }) do
             AttributeRows(Info[1], Info[2], { "round", "match", "cross", "phase", "hero", "chicken" }, Snapshot.RoundInfo)
+        end
+        local RoundSession = Session()
+        Snapshot.Session = RoundSession and Attributes(RoundSession)
+        for Name, Value in pairs(Snapshot.Session or {}) do
+            table.insert(Snapshot.RoundInfo, "Session." .. Name .. " = " .. tostring(Value))
         end
         local RoundContainers = {
             round = true, rounddata = true, roundstate = true, currentround = true,
@@ -267,43 +426,45 @@ return function(Context)
         end
         local Character = Context.Player.Character
         local MovementAttributes = Attributes(Character)
-        local Until = Number(MovementAttributes.DashCooldownUntil)
         Snapshot.Movement = {
             State = MovementAttributes.MovementState,
             Speed = Number(MovementAttributes.MovementSpeed),
             DashReady = MovementAttributes.DashReady,
             DashCount = Number(MovementAttributes.DashCount),
-            DashCooldown = Until and math.max(0, Until - os.clock()) or Number(MovementAttributes.DashCooldown),
+            DashCooldown = Remaining(MovementAttributes.DashCooldownUntil, MovementAttributes.DashCooldown),
+            Recovery = Remaining(MovementAttributes.BoostRecoveryUntil),
             LastDashDistance = Number(MovementAttributes.LastDashDistance),
+            LastDashEntrySpeed = Number(MovementAttributes.LastDashEntrySpeed),
+            FacingPaceMultiplier = Number(MovementAttributes.FacingPaceMultiplier),
             BlockReason = MovementAttributes.MovementBlockReason,
         }
-        if MovementModules.MovementProfiles then
-            local Profile, Error = ReadProfile(false)
-            if not Context.Alive then return Context.State.Snapshot end
-            Context.State.MovementProfile = Profile
-            Context.State.MovementProfileError = Error
-        end
+        Snapshot.ControlGates = Context.State.ControlGates or { Checked = false }
+        Snapshot.Movement.BlockReason = Snapshot.ControlGates.MovementReason or SessionMovementReason() or Snapshot.Movement.BlockReason
         Snapshot.MovementProfile = Context.State.MovementProfile
+        Snapshot.MovementConfig = Context.State.MovementConfig
+        SettingsRows(Snapshot.MovementConfig, "Config", Snapshot.MovementDetails, 0)
+        SettingsRows(Snapshot.MovementProfile, "Profile", Snapshot.MovementDetails, 0)
         local Root = Character and Character:FindFirstChild("HumanoidRootPart")
         if Root and Root:IsA("BasePart") then
             local Velocity = Root.AssemblyLinearVelocity
             Snapshot.Speed = math.sqrt(Velocity.X * Velocity.X + Velocity.Z * Velocity.Z)
         end
-        for _, Key in ipairs({ "RoundInfo", "AbilityInfo", "ConsumableInfo", "Tools" }) do
+        for _, Key in ipairs({ "RoundInfo", "AbilityInfo", "ConsumableInfo", "Tools", "MovementDetails" }) do
             table.sort(Snapshot[Key])
         end
         Context.State.Snapshot = Snapshot
         UpdateSpectating()
-        for _, Callback in ipairs(Subscribers) do Callback(Snapshot) end
+        for _, Entry in ipairs(Subscribers) do Deliver(Entry, Snapshot) end
         return Snapshot
     end
 
-    function Context.Subscribe(Callback)
-        table.insert(Subscribers, Callback)
-        Callback(Context.State.Snapshot)
+    function Context.Subscribe(Callback, Name)
+        local Entry = { Callback = Callback, Name = Name or ("Panel " .. tostring(#Subscribers + 1)) }
+        table.insert(Subscribers, Entry)
+        Deliver(Entry, Context.State.Snapshot)
     end
 
-    function Context.RefreshCatalogs()
+    function Context.RefreshCatalogs(NoPublish)
         if not Context.Alive then return end
         local Catalogs = {
             Abilities = { Entries = {}, Sources = {} },
@@ -340,7 +501,7 @@ return function(Context)
             table.sort(Catalog.Sources)
         end
         Context.State.Catalogs = Catalogs
-        Context.RefreshData()
+        if not NoPublish then Context.RefreshData() end
     end
 
     function Context.CreateList(Section, Flag, OnSelection)
@@ -417,13 +578,42 @@ return function(Context)
     Context.AddCleanup(function()
         Context.StopSpectating()
         table.clear(Subscribers)
+        table.clear(Watches)
     end)
     Context.RefreshData()
     Context.RefreshCatalogs()
+    Context.WatchData("Movement profile", function()
+        local Profile, Error = ReadProfile(false)
+        if not Context.Alive then return end
+        Context.State.MovementProfile, Context.State.MovementProfileError = Profile, Error
+    end, 0.25)
+    Context.WatchData("Movement settings", function()
+        local Config, Error = MovementModule("MovementConfig")
+        if not Context.Alive then return end
+        if Config and (not Number(Config.MaxSpeed) or type(Config.Dash) ~= "table") then
+            Config, Error = nil, "MovementConfig returned invalid movement settings."
+        end
+        Context.State.MovementConfig, Context.State.MovementConfigError = Config, Error
+    end, 1)
+    Context.WatchData("Control gates", function()
+        local Gates = ReadGates(false)
+        if Context.Alive then Context.State.ControlGates = Gates end
+    end, 0.25)
+    local CatalogWatch = Context.WatchData("Catalogs", function() Context.RefreshCatalogs(true) end, 2)
+    for _, Signal in ipairs({ Storage.DescendantAdded, Storage.DescendantRemoving }) do
+        Context.Connect(Signal, function() CatalogWatch.NextAt = 0 end)
+    end
     Context.Connect(game:GetService("RunService").Heartbeat, function(DeltaTime)
+        Clock = Clock + DeltaTime
+        for _, Watch in ipairs(Watches) do
+            if Clock >= Watch.NextAt and not Watch.Running then
+                Watch.NextAt = Clock + Watch.Interval
+                RunLive(Watch, Watch.Callback)
+            end
+        end
         Elapsed = Elapsed + DeltaTime
-        if Elapsed >= 0.5 then
-            Elapsed = Elapsed % 0.5
+        if Elapsed >= 0.25 then
+            Elapsed = Elapsed % 0.25
             Context.RefreshData()
         end
     end)

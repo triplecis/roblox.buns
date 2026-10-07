@@ -8,6 +8,11 @@
         "getgenv",
         "setclipboard",
         "isfolder",
-        "makefolder"
+        "makefolder",
+        "hookfunction",
+        "Vector3",
+        "Instance",
+        "Color3",
+        "task"
     ]
 }

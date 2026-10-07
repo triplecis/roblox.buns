@@ -1,6 +1,8 @@
 return function(Context)
     local ReplicatedStorage = game:GetService("ReplicatedStorage")
     Context.CatalogListeners = {}
+    local Elapsed = 0
+    local ListenerErrors = {}
 
     local function Names(Container, ExcludeBushes)
         local Result, Seen = {}, {}
@@ -19,6 +21,7 @@ return function(Context)
     end
 
     function Context.RefreshCatalog()
+        if not Context.Alive then return Context.Catalog end
         local Content = ReplicatedStorage:FindFirstChild("Content")
         local function Folder(Name)
             return Content and Content:FindFirstChild(Name)
@@ -31,18 +34,43 @@ return function(Context)
                 table.insert(Fishes, Name)
             end
         end
-        Context.Catalog = {
+        local Catalog = {
             Items = Names(Items, false),
             Ores = Names(Folder("Ores"), true),
             Trees = Names(Folder("Trees"), true),
             Fishes = Fishes,
             Oils = Names(Folder("Oils"), true),
         }
+        local Same = Context.Catalog ~= nil
+        if Same then
+            for Group, ItemsInGroup in pairs(Catalog) do
+                local Old = Context.Catalog[Group]
+                if #Old ~= #ItemsInGroup then Same = false; break end
+                for Index, Name in ipairs(ItemsInGroup) do
+                    if Old[Index] ~= Name then Same = false; break end
+                end
+                if not Same then break end
+            end
+        end
+        if Same then return Context.Catalog end
+        Context.Catalog = Catalog
         for _, Callback in ipairs(Context.CatalogListeners) do
-            Callback(Context.Catalog)
+            local Success, Error = pcall(Callback, Context.Catalog)
+            if not Success and ListenerErrors[Callback] ~= tostring(Error) then
+                Context.Notify("Catalog update failed", Error, 3)
+            end
+            ListenerErrors[Callback] = not Success and tostring(Error) or nil
         end
         return Context.Catalog
     end
 
     Context.RefreshCatalog()
+    for _, Signal in ipairs({ ReplicatedStorage.DescendantAdded, ReplicatedStorage.DescendantRemoving }) do
+        Context.Connect(Signal, function() Elapsed = 2 end)
+    end
+    Context.Connect(game:GetService("RunService").Heartbeat, function(DeltaTime)
+        Elapsed = Elapsed + DeltaTime
+        if Elapsed >= 2 then Elapsed = Elapsed % 2; Context.RefreshCatalog() end
+    end)
+    Context.AddCleanup(function() table.clear(Context.CatalogListeners) end)
 end

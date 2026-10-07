@@ -11,13 +11,17 @@ return function(Context)
         { Name = "Rounds", Icon = "flag", Side = 1, File = "rounds.lua" },
         { Name = "Runners", Icon = "shield", Side = 1, File = "runners.lua" },
         { Name = "Chasers", Title = "Catchers", Icon = "swords", Side = 2, File = "chasers.lua" },
+        { Name = "Tackle", Section = "Chasers", File = "tackle.lua" },
         { Name = "Movement", Icon = "zap", Side = 2, File = "movement.lua" },
+        { Name = "Sprint", Section = "Movement", File = "sprint.lua" },
+        { Name = "Hitboxes", Icon = "scan", Side = 2, File = "hitboxes.lua" },
         { Name = "Abilities", Icon = "sparkles", Side = 1, File = "abilities.lua" },
         { Name = "Consumables", Icon = "package", Side = 2, File = "consumables.lua" },
         { Name = "Rewards", Icon = "gem", Side = 1, File = "rewards.lua" },
     }
 
     for _, Module in ipairs(Modules) do
+        if Module.Section then continue end
         ModuleContext.Sections[Module.Name] = Context.Pages.Game:Section({
             Name = Module.Title or Module.Name,
             Icon = Module.Icon,
