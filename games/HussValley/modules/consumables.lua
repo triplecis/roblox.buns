@@ -1,7 +1,13 @@
 return function(Context)
     local Section = Context.Sections.Consumables
-    Section:Label("Single-use items and equipped consumable")
-    Section:Label("Functions pending.")
-
-    -- Resolve the current item definitions in-game before building controls.
+    Section:Label("Consumable definitions")
+    Context.CreateCatalog(Section, "Consumables", "HussValleySelectedConsumables")
+    Section:Label("Carried tools")
+    local Inventory = Context.CreateList(Section, "HussValleyInventory", function() end)
+    local Info = Context.CreateList(Section, "HussValleyConsumableInfo", function() end)
+    Context.Subscribe(function(Snapshot)
+        Inventory(Snapshot.Tools)
+        Info(Snapshot.ConsumableInfo)
+    end)
+    Section:Label("Purchasing and use require a verified game binding.")
 end

@@ -1,7 +1,8 @@
 return function(Context)
     local Section = Context.Sections.Abilities
-    Section:Label("Runner and Chaser ability loadouts")
-    Section:Label("Functions pending.")
-
-    -- Resolve the current ability definitions in-game before building controls.
+    Section:Label("Ability definitions")
+    Context.CreateCatalog(Section, "Abilities", "HussValleySelectedAbilities")
+    local Info = Context.CreateList(Section, "HussValleyAbilityInfo", function() end)
+    Context.Subscribe(function(Snapshot) Info(Snapshot.AbilityInfo) end)
+    Section:Label("Equipping requires a verified game binding.")
 end

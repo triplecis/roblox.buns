@@ -15,7 +15,22 @@ local function Test(Name, Callback)
 end
 
 local function Node(Name, ClassName, Children)
-    local Object = { Name = Name, ClassName = ClassName or "Folder", Children = Children or {} }
+    local Object = { Name = Name, ClassName = ClassName or "Folder", Children = Children or {}, Attributes = {} }
+    function Object:GetAttributes() return table.clone(self.Attributes) end
+    function Object:GetDescendants()
+        local Result = {}
+        local function Visit(Parent)
+            for _, Child in ipairs(Parent:GetChildren()) do
+                table.insert(Result, Child)
+                Visit(Child)
+            end
+        end
+        Visit(self)
+        return Result
+    end
+    function Object:GetFullName()
+        return self.Parent and (self.Parent:GetFullName() .. "." .. self.Name) or self.Name
+    end
     function Object:GetChildren() return table.clone(self.Children) end
     function Object:FindFirstChild(ChildName)
         for _, Child in ipairs(self.Children) do
@@ -31,6 +46,7 @@ local function Node(Name, ClassName, Children)
     end
     function Object:IsA(Class)
         return self.ClassName == Class or (Class == "ValueBase" and self.ClassName == "NumberValue")
+            or (Class == "BasePart" and self.ClassName == "Part")
     end
     return Object
 end
@@ -75,7 +91,8 @@ local function Fixture(Options)
     function F:Humanoid(Speed, Power, Height)
         local Properties = {
             WalkSpeed = Speed or 16, JumpPower = Power or 50, JumpHeight = Height or 7.2,
-            UseJumpPower = true, Parent = true, Name = "Humanoid",
+            UseJumpPower = true, AutoRotate = true, Parent = true, Name = "Humanoid",
+            Health = 100, Sit = false, PlatformStand = false,
         }
         local Signals = {}
         local Methods = {}
@@ -101,10 +118,15 @@ local function Fixture(Options)
     F.Player = {
         Name = "LocalUser", DisplayName = "Local Player", UserId = 1,
         CharacterAdded = F:Signal(), CharacterRemoving = F:Signal(),
+        Attributes = {}, Children = {},
     }
+    F.Player.GetAttributes = Node("Player").GetAttributes
+    F.Player.FindFirstChild = Node("Player").FindFirstChild
+    F.Player.FindFirstChildOfClass = Node("Player").FindFirstChildOfClass
     F.Hum = F:Humanoid()
     if not Options.NoCharacter then F.Player.Character = F:Character(F.Hum) end
-    F.OtherPlayer = { Name = "OtherUser", DisplayName = "Other Player", UserId = 2 }
+    F.OtherPlayer = { Name = "OtherUser", DisplayName = "Other Player", UserId = 2, Attributes = {} }
+    F.OtherPlayer.GetAttributes = F.Player.GetAttributes
     F.Players = {
         LocalPlayer = not Options.NoPlayer and F.Player or nil,
         PlayerAdded = F:Signal(), PlayerRemoving = F:Signal(),
@@ -125,7 +147,10 @@ local function Fixture(Options)
         Node("ServerData", "Folder", { Node("CurrentCycle", "Folder", { F.ClockTime }) }),
     })
     F.Workspace.DistributedGameTime = 10
+    F.Workspace.CurrentCamera = { CameraSubject = F.Hum, CameraType = "Custom", FieldOfView = 70 }
     F.Heartbeat = F:Signal()
+    F.InputService = { InputBegan = F:Signal() }
+    function F.InputService:GetFocusedTextBox() return self.FocusedTextBox end
     F.Marketplace = { Calls = 0 }
     function F.Marketplace:GetProductInfo()
         self.Calls += 1
@@ -135,6 +160,7 @@ local function Fixture(Options)
     F.Services = {
         Players = F.Players, ReplicatedStorage = F.Storage,
         MarketplaceService = F.Marketplace, RunService = { Heartbeat = F.Heartbeat },
+        UserInputService = F.InputService,
     }
     F.Game = { PlaceId = 12345, GameId = Options.GameId or 4298676072, JobId = "job" }
     function F.Game:GetService(Name) return assert(F.Services[Name], "unknown service " .. Name) end
@@ -178,6 +204,7 @@ local function Fixture(Options)
             end
             function Object:Settings() return Section end
             function Object:Refresh(Items)
+                self.Refreshes = (self.Refreshes or 0) + 1
                 self.Items = table.clone(Items)
                 self.Value = {}
             end
@@ -208,6 +235,7 @@ local function Fixture(Options)
 
     F.Env = setmetatable({
         game = F.Game, workspace = F.Workspace,
+        Enum = { CameraType = { Custom = "Custom", Scriptable = "Scriptable" }, KeyCode = { V = "V" } },
         getgenv = function() return F.Global end,
         warn = function(Message) table.insert(F.Warnings, Message) end,
     }, { __index = getfenv() })
@@ -215,6 +243,11 @@ local function Fixture(Options)
         local Chunk, Error = loadstring(Source, Name)
         if Chunk then setfenv(Chunk, F.Env) end
         return Chunk, Error
+    end
+    F.Env.require = function(Module)
+        F.RequireCalls = (F.RequireCalls or 0) + 1
+        if Module.ModuleError then error(Module.ModuleError) end
+        return Module.ModuleValue
     end
     function F:Load()
         self.Lib = self:Library()
@@ -518,6 +551,371 @@ Test("unload during a module request prevents stale initialization", function()
     Equal(Context.LoadModule("late.lua"), false)
     Equal(F:ActiveConnections(), 0)
     Equal(#F.Warnings, 0)
+end)
+
+Test("Huss Valley loads without assuming game data exists", function()
+    local F = Fixture({ GameId = 10764627709, NoContent = true, NoCharacter = true })
+    local Context = assert(F:Load())
+    F:NoModuleErrors()
+    Equal(F.Notifications[1].Description, "Loaded 8/8 modules.")
+    Equal(Context.HussValley.State.Snapshot.Role, "Unknown")
+    Equal(Context.HussValley.State.Snapshot.Unknown, 2)
+    Equal(#Context.HussValley.State.Catalogs.Abilities.Entries, 0)
+    Equal(#Context.HussValley.State.Catalogs.Consumables.Entries, 0)
+    assert(F:ContainsLabel("Round information is not exposed."))
+    assert(F:ContainsLabel("No public leaderboard stats available."))
+    F.Heartbeat:Fire(0.5)
+    Context.Destroy()
+    Equal(F:ActiveConnections(), 0)
+end)
+
+Test("Huss Valley role rosters change without rebuilding unchanged lists", function()
+    local F = Fixture({ GameId = 10764627709 })
+    F.Player.Attributes.Role = "Runner"
+    F.OtherPlayer.Team = { Name = "Chasers" }
+    F.OtherPlayer.Neutral = false
+    local Context = assert(F:Load())
+    local HV, C = Context.HussValley, F.Lib.Controls
+    F:NoModuleErrors()
+    Equal(#HV.State.Snapshot.Runners, 1)
+    Equal(#HV.State.Snapshot.Chasers, 1)
+    Equal(C.HussValleyChasersSelected.Items[1], "Other Player (@OtherUser)")
+    local Refreshes = C.HussValleyChasersSelected.Refreshes
+    HV.RefreshData()
+    Equal(C.HussValleyChasersSelected.Refreshes, Refreshes)
+    C.HussValleyChasersSelected:Set({ "Other Player (@OtherUser)" })
+    F.OtherPlayer.Attributes.Role = "Runner"
+    F.Heartbeat:Fire(0.5)
+    Equal(#HV.State.Snapshot.Runners, 2)
+    Equal(#C.HussValleyChasersSelected.Value, 0)
+    F.OtherPlayer.Attributes.Role = nil
+    F.OtherPlayer.Neutral = true
+    F.Heartbeat:Fire(0.5)
+    Equal(HV.State.Snapshot.Unknown, 1)
+    F.Player.Attributes.Role = nil
+    F.Player.Character.Attributes.Role = "Chaser"
+    F.Heartbeat:Fire(0.5)
+    Equal(HV.State.Snapshot.Role, "Chasers")
+    Context.Destroy()
+end)
+
+Test("Huss Valley spectating follows respawns and restores replaced cameras", function()
+    local F = Fixture({ GameId = 10764627709 })
+    F.OtherPlayer.Attributes.Role = "Chaser"
+    local Target = F:Humanoid()
+    F.OtherPlayer.Character = F:Character(Target)
+    local Context = assert(F:Load())
+    local HV = Context.HussValley
+    local Camera = F.Workspace.CurrentCamera
+    Camera.CameraType = "Scriptable"
+    F.Lib.Controls.HussValleyChasersSelected:Set({ "Other Player (@OtherUser)" })
+    F.Lib.Buttons["Spectate selected catchers"]()
+    Equal(Camera.CameraSubject, Target)
+    Equal(Camera.CameraType, "Custom")
+    local Respawned = F:Humanoid()
+    F.OtherPlayer.Character = F:Character(Respawned)
+    F.Heartbeat:Fire(0.5)
+    Equal(Camera.CameraSubject, Respawned)
+    local NewCamera = { CameraSubject = F.Hum, CameraType = "Scriptable", FieldOfView = 60 }
+    F.Workspace.CurrentCamera = NewCamera
+    F.Heartbeat:Fire(0.5)
+    Equal(Camera.CameraSubject, F.Hum)
+    Equal(Camera.CameraType, "Scriptable")
+    Equal(NewCamera.CameraSubject, Respawned)
+    F.Players.List = { F.Player }
+    F.Heartbeat:Fire(0.5)
+    Equal(NewCamera.CameraSubject, F.Hum)
+    Equal(NewCamera.CameraType, "Scriptable")
+    Equal(HV.State.Spectating, nil)
+    Equal(HV.SpectatePlayer(nil), false)
+    Context.Destroy()
+end)
+
+Test("Huss Valley restores the current local character after a local respawn", function()
+    local F = Fixture({ GameId = 10764627709 })
+    F.OtherPlayer.Character = F:Character(F:Humanoid())
+    local Context = assert(F:Load())
+    local HV = Context.HussValley
+    assert(HV.SpectatePlayer(F.OtherPlayer))
+    F.Hum.Parent = nil
+    local LocalHumanoid = F:Humanoid()
+    F.Player.Character = F:Character(LocalHumanoid)
+    HV.StopSpectating()
+    Equal(F.Workspace.CurrentCamera.CameraSubject, LocalHumanoid)
+    Context.Destroy()
+end)
+
+Test("Huss Valley FOV and turning controls restore values across respawns", function()
+    local F = Fixture({ GameId = 10764627709 })
+    local Root = Node("HumanoidRootPart", "Part")
+    Root.AssemblyLinearVelocity = { X = 3, Y = 100, Z = 4 }
+    table.insert(F.Player.Character.Children, Root)
+    local Context = assert(F:Load())
+    local HV, C = Context.HussValley, F.Lib.Controls
+    Near(HV.State.Snapshot.Speed, 5)
+    C.HussValleyFOV:Set(95)
+    Near(F.Workspace.CurrentCamera.FieldOfView, 70)
+    C.HussValleyFOVEnabled:Set(true)
+    C.HussValleyFOVEnabled:Set(true)
+    Near(F.Workspace.CurrentCamera.FieldOfView, 95)
+    C.HussValleyFOVEnabled:Set(false)
+    Near(F.Workspace.CurrentCamera.FieldOfView, 70)
+    C.HussValleyFOVEnabled:Set(true)
+    F.Workspace.CurrentCamera.FieldOfView = 76
+    F.Heartbeat:Fire(0.5)
+    Near(F.Workspace.CurrentCamera.FieldOfView, 95)
+    C.HussValleyDisableAutoRotate:Set(true)
+    Equal(F.Hum.AutoRotate, false)
+    local NewHumanoid = F:Humanoid()
+    F.Player.Character = F:Character(NewHumanoid)
+    local OldCamera = F.Workspace.CurrentCamera
+    local NewCamera = { FieldOfView = 60, CameraSubject = NewHumanoid, CameraType = "Custom" }
+    F.Workspace.CurrentCamera = NewCamera
+    F.Heartbeat:Fire(0.5)
+    Near(OldCamera.FieldOfView, 76)
+    Near(NewCamera.FieldOfView, 95)
+    Equal(F.Hum.AutoRotate, true)
+    Equal(NewHumanoid.AutoRotate, false)
+    Context.Destroy()
+    Near(NewCamera.FieldOfView, 60)
+    Equal(NewHumanoid.AutoRotate, true)
+    Equal(F:ActiveConnections(), 0)
+end)
+
+Test("Huss Valley catalogs refresh definitions without executing scripts", function()
+    local F = Fixture({ GameId = 10764627709, NoContent = true })
+    local Context = assert(F:Load())
+    local HV, C = Context.HussValley, F.Lib.Controls
+    local Cloak = Node("Cloak", "ModuleScript")
+    local Nested = Node("RunnerAbilities", "Folder", { Cloak })
+    local Abilities = Node("Abilities", "Folder", { Nested, Node("UseAbility", "RemoteEvent") })
+    Nested.Parent = Abilities
+    Abilities.Parent = F.Storage
+    local Consumables = Node("Consumables", "Folder", { Node("Banana Peel", "Model") })
+    Consumables.Parent = F.Storage
+    table.insert(F.Storage.Children, Abilities)
+    table.insert(F.Storage.Children, Consumables)
+    F.Lib.Buttons["Refresh abilities"]()
+    Equal(#HV.State.Catalogs.Abilities.Entries, 1)
+    Equal(#HV.State.Catalogs.Consumables.Entries, 1)
+    Equal(C.HussValleySelectedAbilities.Items[1], "ReplicatedStorage.Abilities/RunnerAbilities/Cloak")
+    C.HussValleySelectedAbilities:Set(table.clone(C.HussValleySelectedAbilities.Items))
+    Equal(#HV.State.SelectedAbilities, 1)
+    Nested.Children = {}
+    F.Lib.Buttons["Refresh consumables"]()
+    Equal(#HV.State.SelectedAbilities, 0)
+    local Backpack = Node("Backpack", "Backpack", { Node("Tool A", "Tool") })
+    table.insert(F.Player.Children, Backpack)
+    table.insert(F.Player.Character.Children, Node("Tool A", "Tool"))
+    table.insert(F.Player.Character.Children, Node("Tool B", "Tool"))
+    F.Player.Attributes.EquippedAbility = "Cloak"
+    F.Player.Attributes.Consumable = "Banana Peel"
+    F.Heartbeat:Fire(0.5)
+    Equal(table.concat(C.HussValleyInventory.Items, ","), "Tool A,Tool B")
+    Equal(C.HussValleyAbilityInfo.Items[1], "Player.EquippedAbility = Cloak")
+    Equal(C.HussValleyConsumableInfo.Items[1], "Player.Consumable = Banana Peel")
+    Context.Destroy()
+end)
+
+Test("Huss Valley round metadata and session stats handle delayed data", function()
+    local F = Fixture({ GameId = 10764627709 })
+    local Context = assert(F:Load())
+    local C = F.Lib.Controls
+    F.Workspace.Attributes.RoundPhase = "Crossing"
+    local Crossing = Node("Crossing", "NumberValue")
+    Crossing.Value = 2
+    table.insert(F.Workspace.Children, Node("RoundData", "Folder", { Crossing }))
+    local Gems = Node("Gems", "NumberValue")
+    Gems.Value = 100
+    local Leaderstats = Node("leaderstats", "Folder", { Gems })
+    table.insert(F.Player.Children, Leaderstats)
+    F.Heartbeat:Fire(0.5)
+    Equal(table.concat(C.HussValleyRoundInfo.Items, ","), "Workspace.RoundData.Crossing = 2,Workspace.RoundPhase = Crossing")
+    Equal(C.HussValleyRewardStats.Items[1], "Gems: 100 (session +0)")
+    Gems.Value = 125
+    F.Heartbeat:Fire(0.5)
+    Equal(C.HussValleyRewardStats.Items[1], "Gems: 125 (session +25)")
+    Gems.Value = 90
+    F.Heartbeat:Fire(0.5)
+    Equal(C.HussValleyRewardStats.Items[1], "Gems: 90 (session -10)")
+    F.Lib.Buttons["Reset session gains"]()
+    Equal(C.HussValleyRewardStats.Items[1], "Gems: 90 (session +0)")
+    Leaderstats.Children = {}
+    F.Heartbeat:Fire(0.5)
+    Equal(#C.HussValleyRewardStats.Items, 0)
+    Context.Destroy()
+end)
+
+local function HussMovementFixture()
+    local F = Fixture({ GameId = 10764627709 })
+    F.Player.Attributes.GameRole = "Runner"
+    local Root = Node("HumanoidRootPart", "Part")
+    Root.AssemblyLinearVelocity = { X = 0, Y = 0, Z = 0 }
+    Root.Anchored = false
+    table.insert(F.Player.Character.Children, Root)
+    F.Root = Root
+    F.MovementFolder = Node("Movement")
+    table.insert(F.Storage.Children, Node("ChickenOrHero", "Folder", { F.MovementFolder }))
+    function F:AddModule(Name, Value)
+        local Module = Node(Name, "ModuleScript")
+        Module.ModuleValue = Value
+        table.insert(self.MovementFolder.Children, Module)
+        return Module
+    end
+    return F
+end
+
+Test("Huss Valley GameRole is authoritative and Catchers are recognized", function()
+    local F = Fixture({ GameId = 10764627709 })
+    F.Player.Attributes.Role = "Runner"
+    F.Player.Attributes.GameRole = "Catcher"
+    local Context = assert(F:Load())
+    Equal(Context.HussValley.State.Snapshot.Role, "Chasers")
+    Equal(#Context.HussValley.State.Snapshot.Chasers, 1)
+    assert(F:ContainsLabel("Your role: Catcher"))
+    F.Player.Attributes.GameRole = "Lobby"
+    F.Heartbeat:Fire(0.5)
+    Equal(Context.HussValley.State.Snapshot.Role, "Unknown")
+    Context.Destroy()
+end)
+
+Test("Huss Valley reads native movement telemetry and frozen profiles", function()
+    local F = HussMovementFixture()
+    local Base = table.freeze({ MaxSpeed = 24, Acceleration = 12 })
+    local Slowed = table.freeze({ MaxSpeed = 13.2, Acceleration = 8.4 })
+    F:AddModule("MovementProfiles", {
+        get = function(Role, Player)
+            Equal(Role, "Runner")
+            Equal(Player, F.Player)
+            return Player.Attributes.GearSlow and Slowed or Base
+        end,
+    })
+    local A = F.Player.Character.Attributes
+    A.MovementState = "Dashing"
+    A.MovementSpeed = 30
+    A.DashReady = true
+    A.DashCooldownUntil = os.clock() + 60
+    A.DashCount = 3
+    A.LastDashDistance = 12
+    local Context = assert(F:Load())
+    local HV = Context.HussValley
+    Equal(F.RequireCalls, nil)
+    Equal(HV.State.Snapshot.Movement.State, "Dashing")
+    Equal(HV.State.Snapshot.Movement.Speed, 30)
+    assert(HV.State.Snapshot.Movement.DashCooldown > 50)
+    F.Lib.Buttons["Read movement profile"]()
+    Equal(F.RequireCalls, 1)
+    Equal(HV.State.Snapshot.MovementProfile, Base)
+    assert(table.isfrozen(Base))
+    F.Player.Attributes.GearSlow = true
+    F.Heartbeat:Fire(0.5)
+    Equal(HV.State.Snapshot.MovementProfile, Slowed)
+    Equal(F.RequireCalls, 1)
+    Near(Base.MaxSpeed, 24)
+    A.DashCooldownUntil = os.clock() - 1
+    F.Heartbeat:Fire(0.5)
+    Near(HV.State.Snapshot.Movement.DashCooldown, 0)
+    Context.Destroy()
+end)
+
+Test("Huss Valley dash uses native input and honors movement gates", function()
+    local F = HussMovementFixture()
+    local Requested = {}
+    local Available = true
+    local Input = {
+        available = function(Player) Equal(Player, F.Player); return Available end,
+        request = function(TouchStyle) table.insert(Requested, TouchStyle) end,
+    }
+    F:AddModule("BoostInput", Input)
+    local Context = assert(F:Load())
+    local HV, A = Context.HussValley, F.Player.Character.Attributes
+    A.DashReady = false
+    Equal(HV.RequestDash(false), false)
+    Equal(F.RequireCalls, nil)
+    A.DashReady = true
+    A.DashCooldownUntil = os.clock() + 60
+    Equal(HV.RequestDash(false), false)
+    A.DashCooldownUntil = nil
+    A.MovementLocked = true
+    Equal(HV.RequestDash(false), false)
+    A.MovementLocked = false
+    Available = false
+    Equal(HV.RequestDash(false), false)
+    Equal(#Requested, 0)
+    Available = true
+    assert(HV.RequestDash(false))
+    Equal(Requested[1], false)
+    F.Lib.Controls.HussValleyDashTouchInput:Set(true)
+    F.Lib.Buttons["Request dash"]()
+    Equal(Requested[2], true)
+    F.Player.Attributes.GameRole = "Catcher"
+    Equal(HV.RequestDash(false), false)
+    Equal(#Requested, 2)
+    F.Player.Attributes.GameRole = "Runner"
+    F.Root.Anchored = true
+    Equal(HV.RequestDash(false), false)
+    F.Root.Anchored = false
+    Input.available = function() error("decompiler-style invalid character property") end
+    Equal(HV.RequestDash(false), false)
+    Equal(#Requested, 2)
+    Context.Destroy()
+    Equal(HV.RequestDash(false), false)
+end)
+
+Test("Huss Valley dash shortcut ignores UI input and disconnects on unload", function()
+    local F = HussMovementFixture()
+    local Requested = 0
+    F:AddModule("BoostInput", {
+        available = function() return true end,
+        request = function() Requested += 1 end,
+    })
+    local Context = assert(F:Load())
+    F.InputService.InputBegan:Fire({ KeyCode = "V" }, false)
+    Equal(Requested, 0)
+    F.Lib.Controls.HussValleyDashShortcut:Set(true)
+    F.InputService.InputBegan:Fire({ KeyCode = "V" }, true)
+    Equal(Requested, 0)
+    F.InputService.FocusedTextBox = {}
+    F.InputService.InputBegan:Fire({ KeyCode = "V" }, false)
+    Equal(Requested, 0)
+    F.InputService.FocusedTextBox = nil
+    F.InputService.InputBegan:Fire({ KeyCode = "V" }, false)
+    Equal(Requested, 1)
+    Context.Destroy()
+    F.InputService.InputBegan:Fire({ KeyCode = "V" }, false)
+    Equal(Requested, 1)
+    Equal(F:ActiveConnections(), 0)
+end)
+
+Test("Huss Valley native module failures stay isolated", function()
+    local F = HussMovementFixture()
+    local Broken = F:AddModule("MovementProfiles", { get = function() error("profile failed") end })
+    local Context = assert(F:Load())
+    Equal(Context.HussValley.ReadMovementProfile(), false)
+    Equal(Context.HussValley.State.MovementProfile, nil)
+    F.Heartbeat:Fire(0.5)
+    Equal(Context.HussValley.RequestDash(false), false)
+    assert(F.Lib.SettingsCreated)
+    Broken.ModuleError = "module require failed"
+    Equal(Context.HussValley.ReadMovementProfile(), false)
+    Context.Destroy()
+end)
+
+Test("Huss Valley unload during require cancels pending dash input", function()
+    local F = HussMovementFixture()
+    local Requested = 0
+    F:AddModule("BoostInput", {
+        available = function() return true end,
+        request = function() Requested += 1 end,
+    })
+    local Context = assert(F:Load())
+    local OriginalRequire = F.Env.require
+    F.Env.require = function(Module)
+        Context.Destroy()
+        return OriginalRequire(Module)
+    end
+    Equal(Context.HussValley.RequestDash(false), false)
+    Equal(Requested, 0)
 end)
 
 print(string.format("%d regression tests passed.", Passed))
