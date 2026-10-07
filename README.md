@@ -1,7 +1,8 @@
 # roblox.buns
 
 A modular Luau client hub using MentalityUI. Refinery Caves 2 is registered under
-universe ID `4298676072`; other games receive the universal pages.
+universe ID `4298676072`, and the Huss Valley starter template under
+`10764627709`; other games receive the universal pages.
 
 Run `loader.lua` in a client environment that provides `game:HttpGet`,
 `loadstring`, and the filesystem/custom-asset APIs required by MentalityUI.
@@ -41,6 +42,10 @@ Every module returns `function(Context)`. Common helpers are
 `Context.Connect(signal, callback)`, and `Context.AddCleanup(callback)`.
 Use these helpers to report loading failures and disconnect listeners on unload.
 RC2 modules also receive `Sections`, `Catalog`, and `Selections`.
+
+The [Huss Valley template](games/HussValley/README.md) provides Rounds, Runners,
+Chasers, Movement, Abilities, Consumables, and Rewards starter modules with
+`Sections` and shared `State`.
 
 Install the official [Luau CLI](https://github.com/luau-lang/luau/releases) and
 run the compile and regression checks from PowerShell:

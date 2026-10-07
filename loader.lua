@@ -146,6 +146,7 @@ end
 
 local Games = {
     [4298676072] = { Folder = "RC2", Default = "4298676072.lua" },
+    [10764627709] = { Folder = "HussValley", Default = "10764627709.lua"},
 }
 
 local function Initialize()
