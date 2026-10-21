@@ -238,14 +238,14 @@ return function(context)
     end
 
     section:Toggle({
-        Name = "Sticky inside selected mob",
+        Name = "Sticky farm selected mob",
         Flag = "LegendarySwordStickyMobFollow",
         Default = false,
         Callback = function(enabled)
             stickyEnabled = enabled
             stickyStatus = nil
             statusLabel:SetText(enabled
-                and "Sticky placement: select a mob to overlap its root."
+                and "Sticky placement: select a mob to stay 2 studs behind it."
                 or "Sticky placement: stopped.")
         end,
     })
@@ -336,10 +336,11 @@ return function(context)
             elseif not targetPart then
                 message = "Sticky placement: selected mob has no target part."
             else
-                message = "Sticky placement: inside " .. mob.Name .. "."
+                message = "Sticky placement: 2 studs behind " .. mob.Name .. "."
                 local pivotOffset = characterRoot.CFrame:ToObjectSpace(character:GetPivot())
                 pcall(function()
-                    character:PivotTo(targetPart.CFrame * pivotOffset)
+                    local behindMob = targetPart.CFrame * CFrame.new(0, 0, 2)
+                    character:PivotTo(behindMob * pivotOffset)
                 end)
             end
 
