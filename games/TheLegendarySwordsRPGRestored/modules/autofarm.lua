@@ -2,62 +2,90 @@
 return function(context)
     local players = game:GetService("Players")
     local runService = game:GetService("RunService")
-    local pathfindingService = game:GetService("PathfindingService")
     local section = context.Sections.Autofarm
     local statusLabel = section:Label("Searching Workspace for a Mobs folder...")
-    local selectedMobLabel = nil
     local mobByLabel = {}
     local mobByKey = {}
-    local selectedMobKey = nil
-    local selectedPlaceName = nil
+    local selectedMobKeys = {}
+    local selectedMobOrder = {}
+    local selectedPlaces = {}
     local placeByLabel = {}
     local stickyEnabled = false
     local stickyStatus = nil
-    local stickyWorkerToken = 0
+    local stickyTargetKey = nil
+    local stickyTargetIndex = 0
     local frozenRoot = nil
     local frozenRootWasAnchored = nil
-    local autoRotateHumanoid = nil
-    local originalAutoRotate = nil
     local stickyDepth = 2
     local stickySide = 0
     local stickyHeight = 0
     local stickyRotationX = 0
     local stickyRotationY = 0
     local stickyRotationZ = 0
-    section:Label("Mob place")
+
+    local function selectionItems(selection)
+        if type(selection) == "table" then
+            return selection
+        end
+        if type(selection) == "string" then
+            return { selection }
+        end
+        return {}
+    end
+
+    section:Label("Mob places (select none for all)")
     local placeList = section:Listbox({
         Flag = "LegendarySwordMobPlaces",
-        Items = { "All places" },
-        Multi = false,
+        Items = {},
+        Multi = true,
         Callback = function(selection)
-            if type(selection) == "table" then
-                selection = selection[1]
+            table.clear(selectedPlaces)
+            for _, label in ipairs(selectionItems(selection)) do
+                local placeName = placeByLabel[label]
+                if placeName then
+                    selectedPlaces[placeName] = true
+                end
             end
-
-            selectedPlaceName = selection and placeByLabel[selection] or nil
-            selectedMobLabel = nil
-            selectedMobKey = nil
             stickyStatus = nil
         end,
     })
+    section:Label("Mobs (select one or more targets)")
     local mobList = section:Listbox({
         Flag = "LegendarySwordMobs",
         Items = {},
-        Multi = false,
+        Multi = true,
         Callback = function(selection)
-            if type(selection) == "table" then
-                selection = selection[1]
+            local retainedOrder = {}
+            if next(selectedPlaces) ~= nil then
+                for _, key in ipairs(selectedMobOrder) do
+                    local mob = mobByKey[key]
+                    local keyPlace = mob and mob.place or string.match(key, "^([^/]+)")
+                    if not selectedPlaces[keyPlace] then
+                        table.insert(retainedOrder, key)
+                    end
+                end
             end
-            selectedMobLabel = selection
-            local selectedMob = selection and mobByLabel[selection]
-            selectedMobKey = selectedMob and selectedMob.key or nil
+
+            table.clear(selectedMobKeys)
+            table.clear(selectedMobOrder)
+            for _, key in ipairs(retainedOrder) do
+                selectedMobKeys[key] = true
+                table.insert(selectedMobOrder, key)
+            end
+            for _, label in ipairs(selectionItems(selection)) do
+                local selectedMob = mobByLabel[label]
+                if selectedMob and not selectedMobKeys[selectedMob.key] then
+                    selectedMobKeys[selectedMob.key] = true
+                    table.insert(selectedMobOrder, selectedMob.key)
+                end
+            end
             stickyStatus = nil
         end,
     })
 
     local elapsed = 0
     local previousItems = {}
-    local previousPlaces = { "All places" }
+    local previousPlaces = {}
 
     local function readValue(container, valueName, searchDescendants)
         local candidateNames = { string.lower(valueName) }
@@ -189,11 +217,37 @@ return function(context)
             end
             table.clear(mobByLabel)
             table.clear(mobByKey)
-            selectedMobLabel = nil
             if #previousItems > 0 then
                 previousItems = {}
+                local retainedPlaces = table.clone(selectedPlaces)
+                local retainedKeys = table.clone(selectedMobKeys)
+                local retainedOrder = table.clone(selectedMobOrder)
                 mobList:Refresh(previousItems)
+                mobList:Set({})
+                table.clear(selectedMobKeys)
+                for key in pairs(retainedKeys) do
+                    selectedMobKeys[key] = true
+                end
+                table.clear(selectedMobOrder)
+                for _, key in ipairs(retainedOrder) do
+                    table.insert(selectedMobOrder, key)
+                end
+                table.clear(selectedPlaces)
+                for placeName in pairs(retainedPlaces) do
+                    selectedPlaces[placeName] = true
+                end
             end
+            if #previousPlaces > 0 then
+                previousPlaces = {}
+                local retainedPlaces = table.clone(selectedPlaces)
+                placeList:Refresh(previousPlaces)
+                placeList:Set({})
+                table.clear(selectedPlaces)
+                for placeName in pairs(retainedPlaces) do
+                    selectedPlaces[placeName] = true
+                end
+            end
+            table.clear(placeByLabel)
             return
         end
 
@@ -240,26 +294,46 @@ return function(context)
 
         scanFolder(mobsFolder, "", nil, nil, nil)
 
-        local places = { "All places" }
+        local places = {}
         local placeNames = {}
+        local hasRootMobs = false
         for placeName in pairs(foundPlaces) do
             table.insert(placeNames, placeName)
+        end
+        for _, mob in ipairs(mobs) do
+            if mob.place == "(root)" then
+                hasRootMobs = true
+                break
+            end
+        end
+        if hasRootMobs then
+            table.insert(placeNames, "(root)")
         end
         table.sort(placeNames, function(first, second)
             return string.lower(first) < string.lower(second)
         end)
         table.clear(placeByLabel)
-        placeByLabel["All places"] = nil
         for _, placeName in ipairs(placeNames) do
             table.insert(places, placeName)
             placeByLabel[placeName] = placeName
         end
-        if selectedPlaceName and not foundPlaces[selectedPlaceName] then
-            selectedPlaceName = nil
-        end
         if not listsMatch(previousPlaces, places) then
+            local retainedPlaces = table.clone(selectedPlaces)
             previousPlaces = places
             placeList:Refresh(places)
+            local desiredSelection = {}
+            for _, placeName in ipairs(places) do
+                if retainedPlaces[placeName] then
+                    table.insert(desiredSelection, placeName)
+                end
+            end
+            placeList:Set(desiredSelection)
+            -- Refresh/Set may invoke the selection callback. Keep selections
+            -- for places that are temporarily absent so detection can recover.
+            table.clear(selectedPlaces)
+            for placeName in pairs(retainedPlaces) do
+                selectedPlaces[placeName] = true
+            end
         end
 
         table.sort(mobs, function(first, second)
@@ -278,29 +352,67 @@ return function(context)
         local items = {}
         table.clear(mobByLabel)
         table.clear(mobByKey)
+        local function isModelAlive(model)
+            local humanoid = model:FindFirstChildWhichIsA("Humanoid", true)
+            if humanoid and humanoid.Health <= 0 then
+                return false
+            end
+
+            local health = model:GetAttribute("Health")
+            if type(health) == "number" and health <= 0 then
+                return false
+            end
+
+            local healthValue = readValue(model, "Health", true)
+            return type(healthValue) ~= "number" or healthValue > 0
+        end
+
         for _, mob in ipairs(mobs) do
             local existing = mobByKey[mob.key]
-            local existingHumanoid = existing and existing.model:FindFirstChildWhichIsA("Humanoid", true)
-            local currentHumanoid = mob.model:FindFirstChildWhichIsA("Humanoid", true)
-            local existingAlive = existingHumanoid == nil or existingHumanoid.Health > 0
-            local currentAlive = currentHumanoid == nil or currentHumanoid.Health > 0
+            local existingAlive = existing and isModelAlive(existing.model)
+            local currentAlive = isModelAlive(mob.model)
             if not existing or (not existingAlive and currentAlive) then
                 mobByKey[mob.key] = mob
             end
+        end
 
-            if not selectedPlaceName or mob.place == selectedPlaceName then
-                table.insert(items, mob.displayName)
-                mobByLabel[mob.displayName] = mob
+        local addedKeys = {}
+        for _, mob in ipairs(mobs) do
+            local selectedMob = mobByKey[mob.key]
+            if not addedKeys[mob.key]
+                and selectedMob
+                and (next(selectedPlaces) == nil or selectedPlaces[selectedMob.place])
+            then
+                addedKeys[mob.key] = true
+                table.insert(items, selectedMob.displayName)
+                mobByLabel[selectedMob.displayName] = selectedMob
             end
         end
 
-        if selectedMobLabel and not mobByLabel[selectedMobLabel] then
-            selectedMobLabel = nil
-        end
-
         if not listsMatch(previousItems, items) then
+            local retainedKeys = table.clone(selectedMobKeys)
+            local retainedOrder = table.clone(selectedMobOrder)
             previousItems = items
             mobList:Refresh(items)
+            local desiredSelection = {}
+            for _, label in ipairs(items) do
+                local mob = mobByLabel[label]
+                if mob and retainedKeys[mob.key] then
+                    table.insert(desiredSelection, label)
+                end
+            end
+            mobList:Set(desiredSelection)
+
+            -- Keep temporarily filtered or despawned targets registered. They
+            -- can reappear after changing the place filter or after respawn.
+            table.clear(selectedMobKeys)
+            for key in pairs(retainedKeys) do
+                selectedMobKeys[key] = true
+            end
+            table.clear(selectedMobOrder)
+            for _, key in ipairs(retainedOrder) do
+                table.insert(selectedMobOrder, key)
+            end
         end
 
         if not stickyEnabled then
@@ -353,14 +465,6 @@ return function(context)
         frozenRootWasAnchored = nil
     end
 
-    local function restoreAutoRotate()
-        if autoRotateHumanoid and autoRotateHumanoid.Parent and originalAutoRotate ~= nil then
-            autoRotateHumanoid.AutoRotate = originalAutoRotate
-        end
-        autoRotateHumanoid = nil
-        originalAutoRotate = nil
-    end
-
     local function freezeInPlace(root)
         if frozenRoot == root then
             return
@@ -372,135 +476,63 @@ return function(context)
         root.Anchored = true
     end
 
-    local function runStickyAutofarm(token)
-        local localPlayer = players.LocalPlayer
+    local function getSelectedLiveMob()
+        local selectedCount = #selectedMobOrder
+        if selectedCount == 0 then
+            stickyTargetKey = nil
+            stickyTargetIndex = 0
+            return nil
+        end
 
-        while context.Alive and stickyEnabled and token == stickyWorkerToken do
-            local mob = selectedMobKey and mobByKey[selectedMobKey]
-            local character = localPlayer.Character
-            local root = character and character:FindFirstChild("HumanoidRootPart")
-            local humanoid = character and character:FindFirstChildOfClass("Humanoid")
+        local function getEligibleMob(index)
+            local key = selectedMobOrder[index]
+            local mob = mobByKey[key]
+            local isPlaceSelected = next(selectedPlaces) == nil or (mob and selectedPlaces[mob.place])
+            if selectedMobKeys[key]
+                and isPlaceSelected
+                and mobIsAlive(mob and mob.model)
+                and getMobTargetPart(mob.model)
+            then
+                return mob, key
+            end
+            return nil
+        end
 
-            if not selectedMobKey then
-                releaseFreeze()
-                setStatus("Walk autofarm: select a mob to begin.")
-                task.wait(0.2)
-            elseif not root or not humanoid or humanoid.Health <= 0 then
-                releaseFreeze()
-                setStatus("Walk autofarm: waiting for your character.")
-                task.wait(0.2)
-            elseif not mobIsAlive(mob) then
-                freezeInPlace(root)
-                setStatus("Walk autofarm: holding position until " .. selectedMobKey .. " respawns.")
-                task.wait(0.2)
-            else
-                releaseFreeze()
-
-                if autoRotateHumanoid ~= humanoid then
-                    restoreAutoRotate()
-                    autoRotateHumanoid = humanoid
-                    originalAutoRotate = humanoid.AutoRotate
-                    humanoid.AutoRotate = false
+        for index, key in ipairs(selectedMobOrder) do
+            if key == stickyTargetKey then
+                local activeMob = getEligibleMob(index)
+                if activeMob then
+                    stickyTargetIndex = index
+                    return activeMob
                 end
-
-                local targetPart = getMobTargetPart(mob.model)
-                if not targetPart then
-                    setStatus("Walk autofarm: selected mob has no target part.")
-                    task.wait(0.2)
-                else
-                    local destination = targetPart.CFrame
-                        * CFrame.new(stickySide, stickyHeight, stickyDepth)
-                        * CFrame.Angles(
-                            math.rad(stickyRotationX),
-                            math.rad(stickyRotationY),
-                            math.rad(stickyRotationZ)
-                        )
-                    setStatus("Walk autofarm: pathing into " .. mob.path .. ".")
-
-                    local path = pathfindingService:CreatePath({ AgentCanJump = true })
-                    local computed = pcall(function()
-                        path:ComputeAsync(root.Position, destination.Position)
-                    end)
-
-                    if computed and path.Status == Enum.PathStatus.Success then
-                        for _, waypoint in ipairs(path:GetWaypoints()) do
-                            if not context.Alive or not stickyEnabled or token ~= stickyWorkerToken then
-                                break
-                            end
-
-                            local currentMob = selectedMobKey and mobByKey[selectedMobKey]
-                            if not mobIsAlive(currentMob and currentMob.model) then
-                                break
-                            end
-
-                            if waypoint.Action == Enum.PathWaypointAction.Jump then
-                                humanoid.Jump = true
-                            end
-
-                            local look = destination.Rotation
-                            root.CFrame = CFrame.new(root.Position) * look
-                            humanoid:MoveTo(waypoint.Position)
-
-                            local moveFinished = false
-                            local reached = false
-                            local finishedConnection = humanoid.MoveToFinished:Connect(function(success)
-                                moveFinished = true
-                                reached = success
-                            end)
-                            local deadline = os.clock() + 3
-                            while context.Alive
-                                and stickyEnabled
-                                and token == stickyWorkerToken
-                                and os.clock() < deadline
-                                and not moveFinished
-                            do
-                                local latestMob = selectedMobKey and mobByKey[selectedMobKey]
-                                if not mobIsAlive(latestMob and latestMob.model) then
-                                    break
-                                end
-                                task.wait(0.05)
-                            end
-                            finishedConnection:Disconnect()
-
-                            if not reached then
-                                break
-                            end
-                        end
-                        task.wait(0.25)
-                    else
-                        setStatus("Walk autofarm: no path to " .. mob.path .. ".")
-                        task.wait(0.4)
-                    end
-                end
+                break
             end
         end
 
-        releaseFreeze()
-        if not stickyEnabled or not context.Alive then
-            restoreAutoRotate()
+        for offset = 1, selectedCount do
+            local index = ((stickyTargetIndex + offset - 1) % selectedCount) + 1
+            local mob, key = getEligibleMob(index)
+            if mob then
+                stickyTargetKey = key
+                stickyTargetIndex = index
+                return mob
+            end
         end
+        return nil
     end
 
     section:Toggle({
-        Name = "Walk into selected mob (toggle)",
+        Name = "Sticky autofarm",
         Flag = "LegendarySwordStickyMobFollow",
         Default = false,
         Callback = function(enabled)
             stickyEnabled = enabled
-            stickyWorkerToken = stickyWorkerToken + 1
             stickyStatus = nil
-            if enabled then
-                task.spawn(runStickyAutofarm, stickyWorkerToken)
-            else
+            if not enabled then
                 releaseFreeze()
-                restoreAutoRotate()
-                local character = players.LocalPlayer.Character
-                local humanoid = character and character:FindFirstChildOfClass("Humanoid")
-                local root = character and character:FindFirstChild("HumanoidRootPart")
-                if humanoid and root then
-                    humanoid:MoveTo(root.Position)
-                end
-                statusLabel:SetText("Walk autofarm: stopped.")
+                statusLabel:SetText("Sticky autofarm: stopped.")
+            else
+                statusLabel:SetText("Sticky autofarm: select one or more mobs to begin.")
             end
         end,
     })
@@ -578,6 +610,45 @@ return function(context)
     end
 
     context.Connect(runService.Heartbeat, function(deltaTime)
+        if stickyEnabled then
+            local character = players.LocalPlayer.Character
+            local root = character and character:FindFirstChild("HumanoidRootPart")
+            local humanoid = character and character:FindFirstChildOfClass("Humanoid")
+            local selectedMob = getSelectedLiveMob()
+
+            if not root or not humanoid or humanoid.Health <= 0 then
+                releaseFreeze()
+                setStatus("Sticky autofarm: waiting for your character.")
+            elseif #selectedMobOrder == 0 then
+                releaseFreeze()
+                setStatus("Sticky autofarm: select one or more mobs to begin.")
+            elseif not selectedMob then
+                freezeInPlace(root)
+                setStatus("Sticky autofarm: holding position until a selected mob respawns.")
+            else
+                releaseFreeze()
+                local targetPart = getMobTargetPart(selectedMob.model)
+                if not targetPart then
+                    setStatus("Sticky autofarm: " .. selectedMob.path .. " has no target part.")
+                else
+                    local pivotOffset = root.CFrame:ToObjectSpace(character:GetPivot())
+                    local stickyTarget = targetPart.CFrame
+                        * CFrame.new(stickySide, stickyHeight, stickyDepth)
+                        * CFrame.Angles(
+                            math.rad(stickyRotationX),
+                            math.rad(stickyRotationY),
+                            math.rad(stickyRotationZ)
+                        )
+                    local moved = pcall(function()
+                        character:PivotTo(stickyTarget * pivotOffset)
+                    end)
+                    setStatus(moved
+                        and ("Sticky autofarm: following " .. selectedMob.path .. ".")
+                        or ("Sticky autofarm: could not follow " .. selectedMob.path .. "."))
+                end
+            end
+        end
+
         elapsed = elapsed + deltaTime
         if elapsed < 1 then
             return
