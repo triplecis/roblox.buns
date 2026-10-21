@@ -8,13 +8,13 @@ return function(context)
     local section = context.Sections.Misc
     local bubbleEvent = replicatedStorage:FindFirstChild("Bubbles")
     local loopKey = Enum.KeyCode.B
-    local bubbleLoopInterval = 0.1
+    local bubbleLoopInterval = 0.01
     local removerInterval = 0.5
     local loopEnabled = false
     local waitingForKey = false
     local elapsed = 0
     local bubblesInLoop = 0
-    local maxBubblesPerLoop = 10
+    local maxBubblesPerLoop = 999
     local removeLoopEnabled = false
     local removeElapsed = 0
 
