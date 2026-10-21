@@ -1,4 +1,4 @@
--- Detect level doors and shops, and let the user move to a selected shop.
+-- Detect level doors and shops, and let the user move to a selected destination.
 return function(context)
     local players = game:GetService("Players")
     local runService = game:GetService("RunService")
@@ -10,7 +10,12 @@ return function(context)
         Flag = "LegendarySwordLevelDoors",
         Items = {},
         Multi = false,
-        Callback = function() end,
+        Callback = function(selection)
+            if type(selection) == "table" then
+                selection = selection[1]
+            end
+            context.SelectedLevelDoor = selection
+        end,
     })
 
     section:Label("Shops")
@@ -30,6 +35,7 @@ return function(context)
     local elapsed = 0
     local previousDoors = {}
     local previousShops = {}
+    local doorByLabel = {}
     local shopByLabel = {}
 
     local function requiredLevel(name)
@@ -54,22 +60,42 @@ return function(context)
         return true
     end
 
+    local function doorPivot(door)
+        if door:IsA("Model") then
+            return door:GetPivot()
+        end
+
+        if door:IsA("BasePart") then
+            return door.CFrame
+        end
+
+        local model = door:FindFirstChildWhichIsA("Model", true)
+        if model then
+            return model:GetPivot()
+        end
+
+        local part = door:FindFirstChildWhichIsA("BasePart", true)
+        return part and part.CFrame
+    end
+
     local function refreshDoors()
         local doorsFolder = workspace:FindFirstChild("LevelDoors")
         if not doorsFolder then
             doorStatus:SetText("workspace.LevelDoors was not found.")
+            table.clear(doorByLabel)
             if #previousDoors > 0 then
                 previousDoors = {}
                 doorList:Refresh(previousDoors)
             end
+            context.SelectedLevelDoor = nil
             return
         end
 
         local doors = {}
         for _, door in ipairs(doorsFolder:GetChildren()) do
             local level = requiredLevel(door.Name)
-            if level then
-                table.insert(doors, { name = door.Name, level = level })
+            if level and doorPivot(door) then
+                table.insert(doors, { name = door.Name, level = level, instance = door })
             end
         end
 
@@ -81,8 +107,11 @@ return function(context)
         end)
 
         local doorNames = {}
+        table.clear(doorByLabel)
         for _, door in ipairs(doors) do
-            table.insert(doorNames, string.format("Level %d+  |  %s", door.level, door.name))
+            local label = string.format("Level %d+  |  %s", door.level, door.name)
+            table.insert(doorNames, label)
+            doorByLabel[label] = door.instance
         end
 
         if not listsMatch(previousDoors, doorNames) then
@@ -90,8 +119,34 @@ return function(context)
             doorList:Refresh(doorNames)
         end
 
+        if context.SelectedLevelDoor and not doorByLabel[context.SelectedLevelDoor] then
+            context.SelectedLevelDoor = nil
+        end
+
         doorStatus:SetText(string.format("Found %d level doors (lowest level first).", #doorNames))
     end
+
+    section:Button({
+        Name = "Teleport to selected level door",
+        Callback = function()
+            local door = context.SelectedLevelDoor and doorByLabel[context.SelectedLevelDoor]
+            local destination = door and doorPivot(door)
+            local character = players.LocalPlayer.Character
+
+            if not destination then
+                context.Notify("Level door teleport", "Select a detected level door first.", 3)
+                return
+            end
+
+            if not character then
+                context.Notify("Level door teleport", "Your character is not available.", 3)
+                return
+            end
+
+            character:PivotTo(destination + Vector3.new(0, 4, 0))
+            context.Notify("Level door teleport", "Moved to " .. door.Name .. ".", 3)
+        end,
+    })
 
     local function shopPivot(shop)
         if shop:IsA("Model") then

@@ -2,10 +2,13 @@
 return function(context)
     local players = game:GetService("Players")
     local runService = game:GetService("RunService")
+    local pathfindingService = game:GetService("PathfindingService")
     local section = context.Sections.Autofarm
     local statusLabel = section:Label("Searching Workspace for a Mobs folder...")
     local selectedMobLabel = nil
     local mobByLabel = {}
+    local stickyEnabled = false
+    local stickyStatus = nil
     local mobList = section:Listbox({
         Flag = "LegendarySwordMobs",
         Items = {},
@@ -22,9 +25,31 @@ return function(context)
     local previousItems = {}
 
     local function readValue(container, valueName, searchDescendants)
-        local valueObject = container:FindFirstChild(valueName, searchDescendants)
-        if valueObject and valueObject:IsA("ValueBase") then
-            return valueObject.Value
+        local candidateNames = { string.lower(valueName) }
+        if string.lower(valueName) == "level" then
+            -- This place stores a mob's numeric level as Settings.Lvl.
+            table.insert(candidateNames, "lvl")
+        end
+
+        local objects = searchDescendants and container:GetDescendants() or container:GetChildren()
+        for _, candidateName in ipairs(candidateNames) do
+            for _, object in ipairs(objects) do
+                if string.lower(object.Name) == candidateName and object:IsA("ValueBase") then
+                    return object.Value
+                end
+            end
+        end
+
+        -- Some versions expose the level only as a label, for example "Lv. 4".
+        if string.lower(valueName) == "level" then
+            for _, object in ipairs(objects) do
+                if object.Name == "Level" and object:IsA("TextLabel") then
+                    local displayedLevel = string.match(object.Text, "%d+")
+                    if displayedLevel then
+                        return tonumber(displayedLevel)
+                    end
+                end
+            end
         end
 
         return nil
@@ -76,14 +101,55 @@ return function(context)
             return directFolder
         end
 
-        -- Some maps place the Mobs folder under a location or map container.
-        return workspace:FindFirstChild("Mobs", true)
+        -- Search every descendant case-insensitively; maps sometimes vary the
+        -- capitalization or add whitespace to the folder name.
+        local descendants = workspace:GetDescendants()
+        for _, instance in ipairs(descendants) do
+            local normalizedName = string.lower(string.gsub(instance.Name, "%s+", ""))
+            if normalizedName == "mobs" and instance:IsA("Folder") then
+                return instance
+            end
+        end
+
+        -- Support common alternate names when the mob container is not called
+        -- exactly "Mobs" in the live Studio hierarchy.
+        local alternateNames = {
+            mob = true,
+            enemies = true,
+            enemy = true,
+            monsters = true,
+        }
+        for _, instance in ipairs(descendants) do
+            local normalizedName = string.lower(string.gsub(instance.Name, "%s+", ""))
+            if alternateNames[normalizedName] and instance:IsA("Folder") then
+                return instance
+            end
+        end
+
+        return nil
+    end
+
+    local function workspaceChildSummary()
+        local names = {}
+        for _, child in ipairs(workspace:GetChildren()) do
+            table.insert(names, child.Name)
+            if #names >= 6 then
+                break
+            end
+        end
+
+        if #names == 0 then
+            return "Workspace is empty."
+        end
+
+        local suffix = #workspace:GetChildren() > #names and ", ..." or ""
+        return "Workspace contains: " .. table.concat(names, ", ") .. suffix
     end
 
     local function refreshMobs()
         local mobsFolder = findMobsFolder()
         if not mobsFolder then
-            statusLabel:SetText("No Mobs folder found in Workspace.")
+            statusLabel:SetText("No mob container found. " .. workspaceChildSummary())
             table.clear(mobByLabel)
             selectedMobLabel = nil
             if #previousItems > 0 then
@@ -157,8 +223,32 @@ return function(context)
             mobList:Refresh(items)
         end
 
-        statusLabel:SetText(string.format("Found %d enemy models.", #items))
+        if #items == 0 then
+            statusLabel:SetText("Mob container found, but it has no enemy models: " .. mobsFolder:GetFullName())
+        else
+            statusLabel:SetText(string.format("Found %d enemy models in %s.", #items, mobsFolder:GetFullName()))
+        end
     end
+
+    local function getMobTargetPart(mob)
+        return mob and (
+            mob:FindFirstChild("HumanoidRootPart", true)
+            or mob:FindFirstChildWhichIsA("BasePart", true)
+        )
+    end
+
+    section:Toggle({
+        Name = "Sticky inside selected mob",
+        Flag = "LegendarySwordStickyMobFollow",
+        Default = false,
+        Callback = function(enabled)
+            stickyEnabled = enabled
+            stickyStatus = nil
+            statusLabel:SetText(enabled
+                and "Sticky placement: select a mob to overlap its root."
+                or "Sticky placement: stopped.")
+        end,
+    })
 
     section:Button({
         Name = "Walk into selected mob",
@@ -177,8 +267,7 @@ return function(context)
                 return
             end
 
-            local targetPart = mob:FindFirstChild("HumanoidRootPart", true)
-                or mob:FindFirstChildWhichIsA("BasePart", true)
+            local targetPart = getMobTargetPart(mob)
             if not targetPart then
                 context.Notify("Autofarm test", "The selected mob has no target part.", 3)
                 return
@@ -186,23 +275,80 @@ return function(context)
 
             local targetName = mob.Name
             task.spawn(function()
-                humanoid:MoveTo(targetPart.Position)
-                local reached = humanoid.MoveToFinished:Wait()
+                local path = pathfindingService:CreatePath({
+                    AgentCanJump = true,
+                })
+
+                local computed = pcall(function()
+                    path:ComputeAsync(character:GetPivot().Position, targetPart.Position)
+                end)
+
+                if not computed or path.Status ~= Enum.PathStatus.Success then
+                    if context.Alive then
+                        statusLabel:SetText("No path found to " .. targetName .. ".")
+                    end
+                    return
+                end
+
+                local reached = true
+                for _, waypoint in ipairs(path:GetWaypoints()) do
+                    if not context.Alive or players.LocalPlayer.Character ~= character then
+                        return
+                    end
+
+                    if waypoint.Action == Enum.PathWaypointAction.Jump then
+                        humanoid.Jump = true
+                    end
+
+                    humanoid:MoveTo(waypoint.Position)
+                    reached = humanoid.MoveToFinished:Wait()
+                    if not reached then
+                        break
+                    end
+                end
 
                 if not context.Alive then
                     return
                 end
 
                 if reached then
-                    statusLabel:SetText("Reached " .. targetName .. "; checking contact behavior.")
+                    statusLabel:SetText("Reached " .. targetName .. " using pathfinding.")
                 else
-                    statusLabel:SetText("Could not reach " .. targetName .. ".")
+                    statusLabel:SetText("Path to " .. targetName .. " was blocked.")
                 end
             end)
         end,
     })
 
     context.Connect(runService.Heartbeat, function(deltaTime)
+        if stickyEnabled then
+            local mob = selectedMobLabel and mobByLabel[selectedMobLabel]
+            local character = players.LocalPlayer.Character
+            local characterRoot = character and character:FindFirstChild("HumanoidRootPart")
+            local humanoid = character and character:FindFirstChildOfClass("Humanoid")
+            local targetPart = getMobTargetPart(mob)
+            local message
+
+            if not mob or not mob.Parent then
+                message = "Sticky placement: select a detected mob."
+            elseif not characterRoot or not humanoid or humanoid.Health <= 0 then
+                message = "Sticky placement: waiting for your character."
+            elseif not targetPart then
+                message = "Sticky placement: selected mob has no target part."
+            else
+                message = "Sticky placement: inside " .. mob.Name .. "."
+                local pivotOffset = characterRoot.CFrame:ToObjectSpace(character:GetPivot())
+                pcall(function()
+                    character:PivotTo(targetPart.CFrame * pivotOffset)
+                end)
+            end
+
+            if message ~= stickyStatus then
+                stickyStatus = message
+                statusLabel:SetText(message)
+            end
+        end
+
         elapsed = elapsed + deltaTime
         if elapsed < 1 then
             return
