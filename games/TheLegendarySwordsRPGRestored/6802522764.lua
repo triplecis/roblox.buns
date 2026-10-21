@@ -4,9 +4,10 @@ return function(context)
     context.LegendarySwords = gameContext
 
     local sectionDefinitions = {
-        { name = "Buy", icon = "shopping-cart", side = 1 },
+        { name = "Shop", icon = "shopping-cart", side = 1 },
         { name = "Autofarm", icon = "bot", side = 1 },
         { name = "Misc", icon = "wrench", side = 2 },
+        { name = "Teleports", icon = "map-pin", side = 1 },
         { name = "Settings", icon = "settings", side = 2 },
         { name = "Debug", icon = "bug", side = 2 },
     }
@@ -20,9 +21,10 @@ return function(context)
     end
 
     local moduleNames = {
-        "buy",
+        "shop",
         "autofarm",
         "misc",
+        "teleports",
         "settings",
         "debug",
     }

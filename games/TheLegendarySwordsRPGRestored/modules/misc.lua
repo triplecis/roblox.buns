@@ -8,6 +8,8 @@ return function(context)
     local section = context.Sections.Misc
     local bubbleEvent = replicatedStorage:FindFirstChild("Bubbles")
     local loopKey = Enum.KeyCode.B
+    local bubbleLoopInterval = 0.1
+    local removerInterval = 0.5
     local loopEnabled = false
     local waitingForKey = false
     local elapsed = 0
@@ -74,7 +76,9 @@ return function(context)
             return false
         end
 
-        if instance.Material ~= Enum.Material.Brick or instance.Shape ~= Enum.PartType.Block then
+        if instance.Material ~= Enum.Material.SmoothPlastic
+            or instance.FormFactor ~= Enum.FormFactor.Brick
+            or instance.Shape ~= Enum.PartType.Block then
             return false
         end
 
@@ -149,7 +153,7 @@ return function(context)
         end,
     })
 
-    section:Label("Press the loop key to start or stop the one-second preview loop.")
+    section:Label("Press the loop key to start or stop the fast preview loop (10 bubbles max).")
 
     context.Connect(inputService.InputBegan, function(input, gameProcessed)
         if inputService:GetFocusedTextBox() then
@@ -185,11 +189,11 @@ return function(context)
         end
 
         elapsed = elapsed + deltaTime
-        if elapsed < 1 then
+        if elapsed < bubbleLoopInterval then
             return
         end
 
-        elapsed = elapsed % 1
+        elapsed = elapsed % bubbleLoopInterval
         if not spawnLocalBubble() then
             loopEnabled = false
             return
@@ -208,11 +212,11 @@ return function(context)
         end
 
         removeElapsed = removeElapsed + deltaTime
-        if removeElapsed < 0.5 then
+        if removeElapsed < removerInterval then
             return
         end
 
-        removeElapsed = removeElapsed % 0.5
+        removeElapsed = removeElapsed % removerInterval
         removeBubbleParts()
     end)
 
