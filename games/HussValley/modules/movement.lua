@@ -1,3 +1,4 @@
+-- Shows native movement telemetry and controls local camera/input preferences.
 return function(Context)
     local Section = Context.Sections.Movement
     local Speed = Section:Label("Waiting for character...")
@@ -53,6 +54,7 @@ return function(Context)
     local FOV = 80
     local CameraState, RotationState
 
+    -- Restore only if the camera still has the value this module applied.
     local function RestoreFOV()
         if CameraState then
             if CameraState.Camera.FieldOfView == CameraState.Applied then
@@ -75,6 +77,7 @@ return function(Context)
         Camera.FieldOfView = FOV
     end
 
+    -- Preserve game changes to AutoRotate made while the option is enabled.
     local function RestoreRotation()
         if RotationState then
             local Humanoid = RotationState.Humanoid

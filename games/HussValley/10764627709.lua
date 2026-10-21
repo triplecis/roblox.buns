@@ -1,4 +1,4 @@
--- Huss Valley: game-specific module entry point.
+-- Huss Valley entry point. Feature modules reuse shared pages where configured.
 return function(Context)
     local ModuleContext = setmetatable({
         Sections = {},
@@ -20,6 +20,7 @@ return function(Context)
         { Name = "Rewards", Icon = "gem", Side = 1, File = "rewards.lua" },
     }
 
+    -- Create each visible section once; helper modules can attach to an existing section.
     for _, Module in ipairs(Modules) do
         if Module.Section then continue end
         ModuleContext.Sections[Module.Name] = Context.Pages.Game:Section({
@@ -29,6 +30,7 @@ return function(Context)
         })
     end
 
+    -- Runtime helpers must load first because the feature modules depend on them.
     local Loaded = 0
     if not Context.LoadModule("games/HussValley/modules/runtime.lua", ModuleContext) then
         Context.Notify("Huss Valley", "Shared data helpers could not load.", 3)

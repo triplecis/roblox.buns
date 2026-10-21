@@ -1,3 +1,5 @@
+-- Client-side entry point: load the pinned UI library, build shared pages,
+-- then load common controls and the module registered for this Roblox universe.
 local BaseUrl = "https://raw.githubusercontent.com/"
 -- Pin the UI API used by this project so upstream changes cannot break the loader.
 local LibraryRepo = "samuraa1/MentalityUI/4f5c7733335bd6576f9fbda7931e8838b1eb8d39/"
@@ -18,6 +20,7 @@ if PreviousContext and PreviousContext.Destroy then
     end
 end
 
+-- Convert HTTP failures and empty responses into a value the caller can report.
 local function Download(URL)
     local Success, Source = pcall(function() return game:HttpGet(URL) end)
     if not Success then
@@ -29,6 +32,7 @@ local function Download(URL)
     return Source
 end
 
+-- Compile and run one downloaded chunk without letting it abort startup.
 local function Execute(Source, Name)
     local Success, Chunk, CompileError = pcall(loadstring, Source, "=" .. Name)
     if not Success or not Chunk then
@@ -79,6 +83,7 @@ local Context = {
     PlaceId = PlaceId, GameId = GameId, JobId = game.JobId,
     GameName = GameName, Alive = true, Pages = {},
 }
+-- Shared lifetime state lets modules register work that must stop on unload.
 local Cleanups = {}
 
 function Context.Notify(Title, Description, Duration)
@@ -136,7 +141,10 @@ function Context.LoadModule(Path, ModuleContext)
     end
     local Initializer, LoadError = Execute(Source, Path)
     if type(Initializer) ~= "function" then
-        Context.Notify("Module load failed", Path .. ": " .. tostring(LoadError or "expected an initializer function"))
+        Context.Notify(
+            "Module load failed",
+            Path .. ": " .. tostring(LoadError or "expected an initializer function")
+        )
         return false
     end
     local Success, Result = pcall(Initializer, ModuleContext or Context)
@@ -144,11 +152,17 @@ function Context.LoadModule(Path, ModuleContext)
     return Success
 end
 
+-- Keys are universe IDs (game.GameId); place-specific overrides can be added per entry.
 local Games = {
     [4298676072] = { Folder = "RC2", Default = "4298676072.lua" },
     [10764627709] = { Folder = "HussValley", Default = "10764627709.lua"},
+    [6802522764] = {
+        Folder = "TheLegendarySwordsRPGRestored",
+        Default = "6802522764.lua",
+    },
 }
 
+-- Build the common pages first so game modules can attach their own sections.
 local function Initialize()
     local Window = Library:Window({ Name = "roblox.buns", SubName = GameName, Logo = Icon })
     Context.Window = Window
@@ -161,7 +175,10 @@ local function Initialize()
             {
                 Icon = "copy", Tooltip = "Copy Discord to clipboard",
                 Callback = function()
-                    local Success = type(setclipboard) == "function" and pcall(setclipboard, "https://discord.gg/ys78VPnnJQ")
+                    local Success = false
+                    if type(setclipboard) == "function" then
+                        Success = pcall(setclipboard, "https://discord.gg/ys78VPnnJQ")
+                    end
                     Context.Notify(Success and "Copied" or "Clipboard unavailable",
                         Success and "Discord link copied." or "Could not copy the Discord link.", 2)
                 end,
@@ -192,13 +209,29 @@ local function Initialize()
         local Filename = GameData.Places and GameData.Places[PlaceId] or GameData.Default
         Context.LoadModule("games/" .. GameData.Folder .. "/" .. Filename)
     else
-        Context.Pages.Game:Section({ Name = "Support", Side = 1 }):Label("No game module is available for this game.")
+        local SupportSection = Context.Pages.Game:Section({ Name = "Support", Side = 1 })
+        SupportSection:Label("No game module is available for this game.")
         Context.Notify("Unsupported game", "Universal controls are available. GameId: " .. tostring(GameId))
     end
     Context.LoadModule("settings.lua")
-    Dashboard:AddCard({ Name = "Main", Description = "Hub information and controls.", Icon = "house", Tab = Context.Pages.Main })
-    Dashboard:AddCard({ Name = "Universal", Description = "Player movement controls.", Icon = "globe", Tab = Context.Pages.Universal })
-    Dashboard:AddCard({ Name = "Players", Description = "Live server roster.", Icon = "users", Tab = Context.Pages.PlayersList })
+    Dashboard:AddCard({
+        Name = "Main",
+        Description = "Hub information and controls.",
+        Icon = "house",
+        Tab = Context.Pages.Main,
+    })
+    Dashboard:AddCard({
+        Name = "Universal",
+        Description = "Player movement controls.",
+        Icon = "globe",
+        Tab = Context.Pages.Universal,
+    })
+    Dashboard:AddCard({
+        Name = "Players",
+        Description = "Live server roster.",
+        Icon = "users",
+        Tab = Context.Pages.PlayersList,
+    })
 end
 
 local Success, Error = pcall(Initialize)

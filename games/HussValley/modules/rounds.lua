@@ -1,3 +1,4 @@
+-- Displays role counts, server uptime, session phase, and discovered round metadata.
 return function(Context)
     local Section = Context.Sections.Rounds
     local Role = Section:Label("Your role: Unknown")

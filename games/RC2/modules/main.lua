@@ -1,40 +1,67 @@
-return function(Context)
-    local Section = Context.Sections.Main
-    local Lists, Statuses = {}, {}
-    local Groups = {
-        { "Ores", "Mining", "SelectedOres" },
-        { "Trees", "Forestry", "SelectedTrees" },
-        { "Fishes", "Fishing", "SelectedFishes" },
-        { "Oils", "Oil", "SelectedOils" },
+-- Show the mining, forestry, fishing, and oil resource catalogs.
+return function(context)
+    local section = context.Sections.Main
+    local listsByCategory = {}
+    local statusByCategory = {}
+
+    local categories = {
+        { key = "Ores", title = "Mining", selection = "SelectedOres" },
+        { key = "Trees", title = "Forestry", selection = "SelectedTrees" },
+        { key = "Fishes", title = "Fishing", selection = "SelectedFishes" },
+        { key = "Oils", title = "Oil", selection = "SelectedOils" },
     }
-    for _, Group in ipairs(Groups) do
-        local Key = Group[1]
-        Section:Label(Group[2])
-        Statuses[Key] = Section:Label("")
-        Lists[Key] = Section:Listbox({
-            Flag = Group[3], Items = Context.Catalog[Key], Multi = true,
-            Callback = function(Value)
-                Context.Selections[Key] = table.clone(Value)
+
+    for _, category in ipairs(categories) do
+        section:Label(category.title)
+        statusByCategory[category.key] = section:Label("")
+
+        listsByCategory[category.key] = section:Listbox({
+            Flag = category.selection,
+            Items = context.Catalog[category.key],
+            Multi = true,
+            Callback = function(selectedNames)
+                context.Selections[category.key] = table.clone(selectedNames)
             end,
         })
     end
 
-    local function Refresh(Catalog)
-        for Key, List in pairs(Lists) do
-            local Available = {}
-            for _, Name in ipairs(Catalog[Key]) do Available[Name] = true end
-            local Selected = {}
-            for _, Name in ipairs(Context.Selections[Key]) do
-                if Available[Name] then table.insert(Selected, Name) end
+    local function refreshCategory(categoryKey, names)
+        local availableNames = {}
+        for _, name in ipairs(names) do
+            availableNames[name] = true
+        end
+
+        local validSelections = {}
+        for _, name in ipairs(context.Selections[categoryKey]) do
+            if availableNames[name] then
+                table.insert(validSelections, name)
             end
-            List:Refresh(Catalog[Key])
-            List:Set(Selected)
-            Statuses[Key]:SetText(#Catalog[Key] > 0 and (tostring(#Catalog[Key]) .. " available")
-                or "No resource definitions available.")
+        end
+
+        listsByCategory[categoryKey]:Refresh(names)
+        listsByCategory[categoryKey]:Set(validSelections)
+
+        if #names == 0 then
+            statusByCategory[categoryKey]:SetText("No resource definitions available.")
+        else
+            statusByCategory[categoryKey]:SetText(tostring(#names) .. " available")
         end
     end
 
-    table.insert(Context.CatalogListeners, Refresh)
-    Section:Button({ Name = "Refresh resources", Icon = "refresh-cw", Callback = Context.RefreshCatalog })
-    Refresh(Context.Catalog)
+    -- Remove selections for resources that disappeared from replicated data.
+    local function refresh(catalog)
+        for categoryKey in pairs(listsByCategory) do
+            refreshCategory(categoryKey, catalog[categoryKey])
+        end
+    end
+
+    table.insert(context.CatalogListeners, refresh)
+
+    section:Button({
+        Name = "Refresh resources",
+        Icon = "refresh-cw",
+        Callback = context.RefreshCatalog,
+    })
+
+    refresh(context.Catalog)
 end

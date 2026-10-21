@@ -1,3 +1,5 @@
+-- Local character-part sizing and preview controls. These edits do not change
+-- server-side catch validation.
 return function(Context)
     local Players = game:GetService("Players")
     local Section = Context.Sections.Hitboxes
@@ -19,6 +21,7 @@ return function(Context)
         return Result
     end
 
+    -- Restore a property only while it still equals the value we applied.
     local function Restore(Part, Record)
         if Record.Box then Record.Box:Destroy() end
         if Part.Parent then
@@ -44,6 +47,7 @@ return function(Context)
         Callback = function(Values) SelectedParts = Map(Values); Update() end,
     })
 
+    -- Preserve valid selections and avoid rebuilding an unchanged UI list.
     local function RefreshList(List, Items, Previous)
         if Previous and table.concat(Items, "\n") == table.concat(Previous, "\n") then return Previous end
         local Available, Selected = Map(Items), {}
@@ -56,6 +60,7 @@ return function(Context)
     end
 
     local Refreshing = false
+    -- List real BaseParts observed in current characters; do not guess hitbox names.
     local function Discover()
         local Names, Paths, Seen = {}, {}, {}
         local function Visit(Container, Prefix)
@@ -81,6 +86,7 @@ return function(Context)
         Refreshing = false
     end
 
+    -- Resolve a discovered slash-delimited path against a newly spawned character.
     local function FindPart(Character, Path)
         local Object = Character
         for Name in string.gmatch(Path, "[^/]+") do
@@ -89,6 +95,7 @@ return function(Context)
         return Object and Object:IsA("BasePart") and Object or nil
     end
 
+    -- Apply edits to the selected players and parts, then restore anything deselected.
     Update = function()
         if Refreshing or not Context.Alive then return end
         local Wanted, Count = {}, 0

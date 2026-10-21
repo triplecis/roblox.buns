@@ -1,3 +1,5 @@
+-- Native tackle controls and live profile telemetry. The game's own module
+-- remains responsible for requests, collision limits, and server reconciliation.
 return function(Context)
     local Section = Context.Sections.Chasers
     local Hitboxes = Context.Sections.Hitboxes
@@ -38,6 +40,7 @@ return function(Context)
         return Vector3.new(Value.X * State.Scale.X, Value.Y * State.Scale.Y, Value.Z * State.Scale.Z)
     end
 
+    -- Select a tackle variant from current speed and Catcher max speed.
     local function RefreshProfile()
         if not Bindings then return end
         State.Profile, State.Bounds, State.MotionDistance, State.Details, State.BoundsType = nil, nil, nil, nil, nil
@@ -112,6 +115,7 @@ return function(Context)
         RefreshDetails(State.Details or {})
     end
 
+    -- Clear stale data and disable a box hook when its source modules disappear.
     local function ClearBindings(Error)
         Bindings, State.Profile, State.Bounds, State.Details, State.BoundsType = nil, nil, nil, nil, nil
         State.Error = Error
@@ -122,6 +126,7 @@ return function(Context)
         end
     end
 
+    -- Retry loading the pure config/math modules as they replicate into the client.
     function Context.ReadTackleBindings(Quiet)
         if not Context.Alive then return false end
         local Loaded = {}
@@ -154,6 +159,7 @@ return function(Context)
         return Context.Alive and State.Profile ~= nil
     end
 
+    -- Mirror the native request's documented eligibility checks before calling it.
     local function BlockReason(Character)
         if Context.Player.Character ~= Character then return "Character changed." end
         local PlayerAttributes = Context.Player:GetAttributes()
@@ -176,6 +182,7 @@ return function(Context)
         return nil
     end
 
+    -- Delegate the request payload and prediction to the game's existing controller.
     function Context.RequestTackle()
         if not Context.Alive then return false end
         local Character = Context.Player.Character
@@ -208,6 +215,7 @@ return function(Context)
         return Requested and Result == true
     end
 
+    -- Remove our prediction-box wrapper while preserving the native bounds function.
     RestoreBounds = function()
         local Entry = BoundsHook
         BoundsHook = nil
@@ -222,6 +230,7 @@ return function(Context)
         if not Success then Context.Notify("Tackle bounds restoration failed", Error, 3) end
     end
 
+    -- Enable editing only after the live bounds function returns a valid Vector3.
     local function InstallBounds()
         if not Context.ReadTackleBindings() then return false, State.Error or "Tackle profile is unavailable." end
         if not State.Bounds then return false, "HitReplayMath.bounds did not return a positive Vector3; its source is needed." end
@@ -229,6 +238,7 @@ return function(Context)
         local Hook = type(hookfunction) == "function" and hookfunction or nil
         if table.isfrozen(Module) and not Hook then return false, "Frozen HitReplayMath requires hookfunction." end
         local Entry = { Module = Module, Target = Module.bounds, Original = Module.bounds, Active = true }
+        -- Only scale the verified Tackle Vector3 result; leave every other action intact.
         Entry.Wrapper = function(Kind, Profile, ...)
             local Bounds = Entry.Original(Kind, Profile, ...)
             if Entry.Active and Context.Alive and State.BoxEnabled and Kind == "Tackle" and Vector(Bounds) then

@@ -1,3 +1,5 @@
+-- Shared Huss Valley state: native-module readers, live snapshots, catalogs,
+-- player roles, and camera-safe spectating helpers.
 return function(Context)
     local Players = game:GetService("Players")
     local Storage = game:GetService("ReplicatedStorage")
@@ -14,6 +16,7 @@ return function(Context)
         Consumables = { Entries = {}, Sources = {} },
     }
 
+    -- Run subscribers and pollers in separate tasks so one slow panel cannot stall snapshots.
     local function RunLive(Entry, Callback)
         if Entry.Running or not Context.Alive then return end
         Entry.Running = true
@@ -30,12 +33,14 @@ return function(Context)
         end)
     end
 
+    -- Schedule retryable reads independently from the Heartbeat snapshot publisher.
     function Context.WatchData(Name, Callback, Interval)
         local Entry = { Name = Name, Callback = Callback, Interval = Interval or 0.5, NextAt = 0 }
         table.insert(Watches, Entry)
         return Entry
     end
 
+    -- Retain only the newest snapshot if this panel's previous callback is still running.
     local function Deliver(Entry, Snapshot)
         Entry.Latest = Snapshot
         RunLive(Entry, function() Entry.Callback(Entry.Latest) end)
@@ -98,6 +103,7 @@ return function(Context)
         return Seconds and math.max(0, Seconds)
     end
 
+    -- Cache native ModuleScripts by instance; a replaced game module is loaded again.
     local function NativeModule(FolderName, Modules, Name, Force)
         local GameRoot = Storage:FindFirstChild("ChickenOrHero")
         local Folder = GameRoot and GameRoot:FindFirstChild(FolderName)
@@ -126,6 +132,7 @@ return function(Context)
         return NativeModule("Game", GameModules, Name, Force)
     end
 
+    -- Read the game's own movement and UI gates without reconstructing their rules.
     local function ReadGates(Force)
         local Gate, Error = MovementModule("ControlGate", Force)
         local Result = { Checked = false, Error = Error }
@@ -155,6 +162,7 @@ return function(Context)
         return Gates
     end
 
+    -- Ask the live profile module for effective movement values, including gear modifiers.
     local function ReadProfile(Force, Role)
         local Profiles, Error = MovementModule("MovementProfiles", Force)
         if not Context.Alive then return nil, "Session unloaded." end
@@ -201,6 +209,7 @@ return function(Context)
         return Config ~= nil and Gates.Checked
     end
 
+    -- Apply local character checks before asking the game's buffered dash input to queue.
     local function DashBlockReason(Character)
         if Context.Player.Character ~= Character then return "Character changed; request dash again." end
         local Human = Humanoid(Context.Player)
@@ -230,6 +239,7 @@ return function(Context)
         return Reason
     end
 
+    -- Queue native dash intent; the game's controller decides whether a dash can start.
     function Context.RequestDash(TouchStyle)
         if not Context.Alive then return false end
         local Character = Context.Player.Character
@@ -278,6 +288,7 @@ return function(Context)
         end
     end
 
+    -- Follow a target's current Humanoid and restore the prior camera when ownership ends.
     local function UpdateSpectating()
         if not Spectating then return end
         local Present = false
@@ -359,6 +370,7 @@ return function(Context)
         return Rows
     end
 
+    -- Compose the current player, round, inventory, stats, and movement view.
     function Context.RefreshData()
         if not Context.Alive then return Context.State.Snapshot end
         local Snapshot = {
@@ -464,6 +476,7 @@ return function(Context)
         Deliver(Entry, Context.State.Snapshot)
     end
 
+    -- Scan known replicated folders without requiring or executing their definition modules.
     function Context.RefreshCatalogs(NoPublish)
         if not Context.Alive then return end
         local Catalogs = {
@@ -504,6 +517,7 @@ return function(Context)
         if not NoPublish then Context.RefreshData() end
     end
 
+    -- Update a multi-select list only when its item names change.
     function Context.CreateList(Section, Flag, OnSelection)
         local List = Section:Listbox({ Flag = Flag, Items = {}, Multi = true, Callback = OnSelection })
         local Previous

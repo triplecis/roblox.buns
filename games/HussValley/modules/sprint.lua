@@ -1,3 +1,5 @@
+-- Optional local sprint profile adjustment. It wraps the game's profile getter,
+-- edits a private copy for the local player, and restores the hook on disable.
 return function(Context)
     local Section = Context.Sections.Movement
     local Input = game:GetService("UserInputService")
@@ -12,6 +14,7 @@ return function(Context)
     local Cache = setmetatable({}, { __mode = "k" })
     local Toggle
 
+    -- Never boost while the user is typing, outside a role, or movement-locked.
     local function SprintActive()
         if not Context.Alive or not State.Enabled then return false end
         if Input:GetFocusedTextBox() then return false end
@@ -25,6 +28,7 @@ return function(Context)
         return State.Always or Keys[Enum.KeyCode.LeftShift] or Keys[Enum.KeyCode.RightShift] or false
     end
 
+    -- Disable our wrapper before restoring so it becomes a harmless pass-through.
     local function RestoreHook()
         local Previous = HookState
         HookState = nil
@@ -43,6 +47,7 @@ return function(Context)
         table.clear(Cache)
     end
 
+    -- The shipped profile table is frozen, so executors need hookfunction for this option.
     local function InstallHook()
         local Root = Storage:FindFirstChild("ChickenOrHero")
         local Movement = Root and Root:FindFirstChild("Movement")
@@ -58,6 +63,7 @@ return function(Context)
             return false, "This client needs hookfunction to edit the frozen movement profile."
         end
         local Entry = { Active = true, Profiles = Profiles, Target = Profiles.get, Original = Profiles.get }
+        -- Return the game's original profile for everyone except this local player.
         Entry.Wrapper = function(Role, Player, ...)
             local Profile = Entry.Original(Role, Player, ...)
             if not Entry.Active or not Context.Alive or Player ~= Context.Player or type(Profile) ~= "table" then

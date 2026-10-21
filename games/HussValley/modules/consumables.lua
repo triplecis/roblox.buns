@@ -1,3 +1,4 @@
+-- Browses consumable definitions, carried Tools, and exposed consumable attributes.
 return function(Context)
     local Section = Context.Sections.Consumables
     Section:Label("Consumable definitions")

@@ -1,26 +1,39 @@
-return function(Context)
-    local Section = Context.Sections.Buy
-    Section:Label("Item catalog")
-    local Status = Section:Label("")
-    Section:Label("Purchasing is not implemented.")
-    local List = Section:Listbox({
-        Flag = "SelectedBuyItems", Items = Context.Catalog.Items, Multi = true,
-        Callback = function(Value)
-            Context.Selections.BuyItems = table.clone(Value)
+-- Browse item definitions. Purchasing has not been connected to a game action.
+return function(context)
+    local section = context.Sections.Buy
+    section:Label("Item catalog")
+
+    local statusLabel = section:Label("")
+    section:Label("Purchasing is not implemented.")
+
+    local itemList = section:Listbox({
+        Flag = "SelectedBuyItems",
+        Items = context.Catalog.Items,
+        Multi = true,
+        Callback = function(selectedItems)
+            context.Selections.BuyItems = table.clone(selectedItems)
         end,
     })
 
-    local function Refresh(Catalog)
-        local Available = {}
-        for _, Name in ipairs(Catalog.Items) do Available[Name] = true end
-        local Selected = {}
-        for _, Name in ipairs(Context.Selections.BuyItems or {}) do
-            if Available[Name] then table.insert(Selected, Name) end
+    -- Keep only selected names that still exist after the catalog refreshes.
+    local function refresh(catalog)
+        local availableItems = {}
+        for _, itemName in ipairs(catalog.Items) do
+            availableItems[itemName] = true
         end
-        List:Refresh(Catalog.Items)
-        List:Set(Selected)
-        Status:SetText(tostring(#Catalog.Items) .. " item definitions available")
+
+        local validSelections = {}
+        for _, itemName in ipairs(context.Selections.BuyItems or {}) do
+            if availableItems[itemName] then
+                table.insert(validSelections, itemName)
+            end
+        end
+
+        itemList:Refresh(catalog.Items)
+        itemList:Set(validSelections)
+        statusLabel:SetText(tostring(#catalog.Items) .. " item definitions available")
     end
-    table.insert(Context.CatalogListeners, Refresh)
-    Refresh(Context.Catalog)
+
+    table.insert(context.CatalogListeners, refresh)
+    refresh(context.Catalog)
 end

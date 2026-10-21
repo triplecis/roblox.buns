@@ -1,3 +1,4 @@
+-- Catcher roster and camera spectating controls (the internal role key stays Chasers).
 return function(Context)
     local Section = Context.Sections.Chasers
     Section:Label("Live Catcher roster")

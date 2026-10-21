@@ -1,3 +1,4 @@
+-- Browses replicated ability definitions and exposed player ability attributes.
 return function(Context)
     local Section = Context.Sections.Abilities
     Section:Label("Ability definitions")

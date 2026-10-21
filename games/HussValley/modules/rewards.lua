@@ -1,3 +1,4 @@
+-- Reads public leaderstats and tracks their change relative to the session baseline.
 return function(Context)
     local Section = Context.Sections.Rewards
     local Status = Section:Label("")
