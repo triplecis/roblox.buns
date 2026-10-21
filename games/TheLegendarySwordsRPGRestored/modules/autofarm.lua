@@ -9,6 +9,12 @@ return function(context)
     local mobByLabel = {}
     local stickyEnabled = false
     local stickyStatus = nil
+    local stickyDepth = 2
+    local stickySide = 0
+    local stickyHeight = 0
+    local stickyRotationX = 0
+    local stickyRotationY = 0
+    local stickyRotationZ = 0
     local mobList = section:Listbox({
         Flag = "LegendarySwordMobs",
         Items = {},
@@ -238,17 +244,89 @@ return function(context)
     end
 
     section:Toggle({
-        Name = "Sticky farm selected mob",
+        Name = "Sticky autofarm",
         Flag = "LegendarySwordStickyMobFollow",
         Default = false,
         Callback = function(enabled)
             stickyEnabled = enabled
             stickyStatus = nil
             statusLabel:SetText(enabled
-                and "Sticky placement: select a mob to stay 2 studs behind it."
+                and "Sticky autofarm: select a mob to begin."
                 or "Sticky placement: stopped.")
         end,
     })
+
+    section:Slider({
+        Name = "Sticky front/back offset (+ behind)",
+        Flag = "LegendarySwordStickyDepth",
+        Default = stickyDepth,
+        Min = -12,
+        Max = 12,
+        Decimals = 0.5,
+        Suffix = " studs",
+        Callback = function(value)
+            if type(value) == "number" and value == value then
+                stickyDepth = math.clamp(value, -12, 12)
+            end
+        end,
+    })
+
+    section:Slider({
+        Name = "Sticky up/down offset (+ up)",
+        Flag = "LegendarySwordStickyHeight",
+        Default = stickyHeight,
+        Min = -12,
+        Max = 12,
+        Decimals = 0.5,
+        Suffix = " studs",
+        Callback = function(value)
+            if type(value) == "number" and value == value then
+                stickyHeight = math.clamp(value, -12, 12)
+            end
+        end,
+    })
+
+    section:Slider({
+        Name = "Sticky left/right offset (+ right)",
+        Flag = "LegendarySwordStickySide",
+        Default = stickySide,
+        Min = -12,
+        Max = 12,
+        Decimals = 0.5,
+        Suffix = " studs",
+        Callback = function(value)
+            if type(value) == "number" and value == value then
+                stickySide = math.clamp(value, -12, 12)
+            end
+        end,
+    })
+
+    for _, axis in ipairs({ "X", "Y", "Z" }) do
+        local rotationAxis = axis
+        section:Slider({
+            Name = "Sticky rotation " .. rotationAxis,
+            Flag = "LegendarySwordStickyRotation" .. rotationAxis,
+            Default = 0,
+            Min = -180,
+            Max = 180,
+            Decimals = 5,
+            Suffix = "°",
+            Callback = function(value)
+                if type(value) ~= "number" or value ~= value then
+                    return
+                end
+
+                value = math.clamp(value, -180, 180)
+                if rotationAxis == "X" then
+                    stickyRotationX = value
+                elseif rotationAxis == "Y" then
+                    stickyRotationY = value
+                else
+                    stickyRotationZ = value
+                end
+            end,
+        })
+    end
 
     section:Button({
         Name = "Walk into selected mob",
@@ -336,11 +414,25 @@ return function(context)
             elseif not targetPart then
                 message = "Sticky placement: selected mob has no target part."
             else
-                message = "Sticky placement: 2 studs behind " .. mob.Name .. "."
+                message = string.format(
+                    "Sticky autofarm: right %+.1f, up %+.1f, back %+.1f; rotation %+.0f/%+.0f/%+.0f on %s.",
+                    stickySide,
+                    stickyHeight,
+                    stickyDepth,
+                    stickyRotationX,
+                    stickyRotationY,
+                    stickyRotationZ,
+                    mob.Name
+                )
                 local pivotOffset = characterRoot.CFrame:ToObjectSpace(character:GetPivot())
                 pcall(function()
-                    local behindMob = targetPart.CFrame * CFrame.new(0, 0, 2)
-                    character:PivotTo(behindMob * pivotOffset)
+                    local stickyOffset = CFrame.new(stickySide, stickyHeight, stickyDepth)
+                    local stickyRotation = CFrame.Angles(
+                        math.rad(stickyRotationX),
+                        math.rad(stickyRotationY),
+                        math.rad(stickyRotationZ)
+                    )
+                    character:PivotTo(targetPart.CFrame * stickyOffset * stickyRotation * pivotOffset)
                 end)
             end
 
