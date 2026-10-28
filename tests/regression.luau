@@ -509,7 +509,7 @@ end)
 
 Test("all module failure stages are isolated", function()
     local F = Fixture()
-    F.Overrides["games/RC2/modules/main.lua"] = false
+    F.Overrides["games/RefineryCaves2/modules/main.lua"] = false
     local Context = assert(F:Load())
     assert(F:ContainsLabel("Server time: 13:30"))
     Equal(F.Lib.SettingsCreated, true)
@@ -526,6 +526,18 @@ Test("all module failure stages are isolated", function()
     F.Overrides["good.lua"] = "return function(Context) Context.TestLoaded = true end"
     Equal(Context.LoadModule("good.lua"), true)
     Equal(Context.TestLoaded, true)
+    Context.Destroy()
+end)
+
+Test("Sell Lemons loads the combined drop autofarm toggle", function()
+    local F = Fixture({ GameId = 7395930870 })
+    local Context = assert(F:Load())
+    assert(F.Lib.Controls.SellLemonsAutoFarm)
+    Equal(F.Lib.Controls.SellLemonsAutoFarm.Value, false)
+    assert(F.Lib.Controls.SellLemonsTouchInterestAutoFarm)
+    Equal(F.Lib.Controls.SellLemonsTouchInterestAutoFarm.Value, false)
+    Equal(F.Lib.Controls.SellLemonsCashDrop, nil)
+    Equal(F.Lib.Controls.SellLemonsSpookyCoinDrop, nil)
     Context.Destroy()
 end)
 

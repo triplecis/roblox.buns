@@ -154,7 +154,8 @@ end
 
 -- Keys are universe IDs (game.GameId); place-specific overrides can be added per entry.
 local Games = {
-    [4298676072] = { Folder = "RC2", Default = "4298676072.lua" },
+    [4298676072] = { Folder = "RefineryCaves2", Default = "4298676072.lua" },
+    [7395930870] = { Folder = "SellLemons", Default = "7395930870.lua" },
     [10764627709] = { Folder = "HussValley", Default = "10764627709.lua"},
     [6802522764] = {
         Folder = "TheLegendarySwordsRPGRestored",

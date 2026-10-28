@@ -44,7 +44,7 @@ return function(context)
 
     local loadedCount = 0
     for _, moduleName in ipairs(moduleNames) do
-        local path = "games/RC2/modules/" .. moduleName .. ".lua"
+        local path = "games/RefineryCaves2/modules/" .. moduleName .. ".lua"
         if context.LoadModule(path, gameContext) then
             loadedCount = loadedCount + 1
         end
