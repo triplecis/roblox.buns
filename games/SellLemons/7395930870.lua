@@ -1,4 +1,4 @@
--- Create the Sell Lemons sections and load the drop autofarm.
+-- Create the Sell Lemons sections and load their feature modules.
 return function(context)
     local gameContext = setmetatable({ Sections = {} }, { __index = context })
     context.SellLemons = gameContext
@@ -8,6 +8,12 @@ return function(context)
         Icon = "coins",
         Side = 1,
     })
+    gameContext.Sections.Misc = context.Pages.Game:Section({
+        Name = "Misc",
+        Icon = "wrench",
+        Side = 2,
+    })
 
     context.LoadModule("games/SellLemons/modules/autofarm.lua", gameContext)
+    context.LoadModule("games/SellLemons/modules/misc.lua", gameContext)
 end

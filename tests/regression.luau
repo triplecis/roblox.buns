@@ -200,7 +200,11 @@ local function Fixture(Options)
             return Data
         end
         local function Control(Data, Kind)
-            local Object = { Value = Data.Default or (Kind == "Listbox" and {} or false), Items = Data.Items }
+            local Object = {
+                Value = Data.Default or (Kind == "Listbox" and {} or false),
+                Items = Data.Items,
+                Multi = Data.Multi,
+            }
             function Object:Set(Value, SkipCallback)
                 self.Value = Value
                 if Data.Callback and not SkipCallback then Data.Callback(Value) end
@@ -529,15 +533,58 @@ Test("all module failure stages are isolated", function()
     Context.Destroy()
 end)
 
-Test("Sell Lemons loads the combined drop autofarm toggle", function()
+Test("Sell Lemons exposes single-select drop type for both autofarm methods", function()
     local F = Fixture({ GameId = 7395930870 })
     local Context = assert(F:Load())
     assert(F.Lib.Controls.SellLemonsAutoFarm)
     Equal(F.Lib.Controls.SellLemonsAutoFarm.Value, false)
-    assert(F.Lib.Controls.SellLemonsTouchInterestAutoFarm)
-    Equal(F.Lib.Controls.SellLemonsTouchInterestAutoFarm.Value, false)
-    Equal(F.Lib.Controls.SellLemonsCashDrop, nil)
-    Equal(F.Lib.Controls.SellLemonsSpookyCoinDrop, nil)
+    assert(F.Lib.Controls.SellLemonsDropType)
+    Equal(F.Lib.Controls.SellLemonsDropType.Multi, false)
+    Equal(#F.Lib.Controls.SellLemonsDropType.Items, 2)
+    Equal(F.Lib.Controls.SellLemonsDropType.Items[1], "CashDrop")
+    Equal(F.Lib.Controls.SellLemonsDropType.Items[2], "SpookyCoinDrop")
+    Equal(F.Lib.Controls.SellLemonsNextRedeemId, nil)
+    assert(F.Lib.Controls.SellLemonsRemoteRedeemAutoFarm)
+    Equal(F.Lib.Controls.SellLemonsRemoteRedeemAutoFarm.Value, false)
+    Equal(F.Lib.Controls.SellLemonsTouchInterestAutoFarm, nil)
+    Context.Destroy()
+end)
+
+Test("Sell Lemons sticky FOV, WalkSpeed, and jump settings reapply and restore", function()
+    local F = Fixture({ GameId = 7395930870 })
+    local Context = assert(F:Load())
+    local C = F.Lib.Controls
+
+    C.SellLemonsMiscFOVEnabled:Set(true)
+    C.SellLemonsMiscFOV:Set(90)
+    Equal(F.Workspace.CurrentCamera.FieldOfView, 90)
+    F.Workspace.CurrentCamera.FieldOfView = 80
+    F.Heartbeat:Fire(0.1)
+    Equal(F.Workspace.CurrentCamera.FieldOfView, 90)
+    C.SellLemonsMiscFOVEnabled:Set(false)
+    Equal(F.Workspace.CurrentCamera.FieldOfView, 80)
+
+    C.SellLemonsMiscWalkSpeedEnabled:Set(true)
+    C.SellLemonsMiscWalkSpeed:Set(35)
+    Equal(F.Hum.WalkSpeed, 35)
+    F.Hum.WalkSpeed = 20
+    F.Heartbeat:Fire(0.1)
+    Equal(F.Hum.WalkSpeed, 35)
+    C.SellLemonsMiscWalkSpeedEnabled:Set(false)
+    Equal(F.Hum.WalkSpeed, 20)
+
+    C.SellLemonsMiscJumpEnabled:Set(true)
+    C.SellLemonsMiscJump:Set(75)
+    Equal(F.Hum.JumpPower, 75)
+    Near(F.Hum.JumpHeight, 10.8)
+    F.Hum.JumpPower = 45
+    F.Hum.JumpHeight = 6.5
+    F.Heartbeat:Fire(0.1)
+    Equal(F.Hum.JumpPower, 75)
+    Near(F.Hum.JumpHeight, 10.8)
+    C.SellLemonsMiscJumpEnabled:Set(false)
+    Equal(F.Hum.JumpPower, 45)
+    Equal(F.Hum.JumpHeight, 6.5)
     Context.Destroy()
 end)
 
