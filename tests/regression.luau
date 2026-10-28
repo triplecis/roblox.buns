@@ -593,6 +593,22 @@ Test("Sell Lemons discovers Upgrade remotes under the local player's Purchases",
         AddUpgrade(OtherTycoon, Entry[2], Entry[1])
         AddUpgrade(LocalTycoon, Entry[2], Entry[1])
     end
+    local Purchases = LocalTycoon:FindFirstChild("Purchases")
+    local LemonStand = Purchases:FindFirstChild("Lemon Stand")
+    local Buttons = Node("Buttons", "Folder")
+    local Multipler = Node("Multipler", "Folder")
+    local Juicer = Node("Juicer", "Model")
+    local Prompt = Node("EarnerPrompt", "ProximityPrompt")
+    Prompt.Enabled = true
+    Prompt.HoldDuration = 0
+    F.PromptBegins = 0
+    F.PromptEnds = 0
+    function Prompt:InputHoldBegin() F.PromptBegins += 1 end
+    function Prompt:InputHoldEnd() F.PromptEnds += 1 end
+    table.insert(LemonStand.Children, Buttons)
+    table.insert(Buttons.Children, Multipler)
+    table.insert(Multipler.Children, Juicer)
+    table.insert(Juicer.Children, Prompt)
 
     local Context = assert(F:Load())
     local UpgradeLocations = F.Lib.Controls.SellLemonsUpgradeLocations
@@ -602,6 +618,12 @@ Test("Sell Lemons discovers Upgrade remotes under the local player's Purchases",
     assert(table.find(UpgradeLocations.Items, "Purchases.Lemon Stand.Lemon Stand.Lemon Stand.Upgrade"))
     assert(table.find(UpgradeLocations.Items, "Purchases.LemonDash.LemonDash.LemonDash.Upgrade"))
     assert(table.find(UpgradeLocations.Items, "Purchases.Lemon Depot.Lemon Depot.Lemon Depot.Upgrade"))
+    local ButtonTypes = F.Lib.Controls.SellLemonsButtonType
+    Equal(ButtonTypes.Multi, false)
+    assert(table.find(ButtonTypes.Items, "Multiplier"))
+    local Products = F.Lib.Controls.SellLemonsPurchasableProducts
+    local JuicerPath = "Lemon Stand / Buttons / Multipler / Juicer"
+    assert(table.find(Products.Items, JuicerPath))
     UpgradeLocations:Set("Purchases.LemonDash.LemonDash.LemonDash.Upgrade")
     assert(F.Lib.Buttons["Invoke selected Upgrade"])
     F.Lib.Buttons["Invoke selected Upgrade"]()
@@ -609,6 +631,11 @@ Test("Sell Lemons discovers Upgrade remotes under the local player's Purchases",
     Equal(F.UpgradeRequests[1].Tycoon, "Tycoon7")
     Equal(F.UpgradeRequests[1].Name, "LemonDash")
     Equal(F.UpgradeRequests[1].Value, 1)
+    Products:Set({ JuicerPath })
+    assert(F.Lib.Buttons["Purchase selected products"])
+    F.Lib.Buttons["Purchase selected products"]()
+    Equal(F.PromptBegins, 1)
+    Equal(F.PromptEnds, 1)
     Context.Destroy()
 end)
 
