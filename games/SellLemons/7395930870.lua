@@ -13,7 +13,13 @@ return function(context)
         Icon = "wrench",
         Side = 2,
     })
+    gameContext.Sections.Upgrades = context.Pages.Game:Section({
+        Name = "Upgrades",
+        Icon = "trending-up",
+        Side = 2,
+    })
 
     context.LoadModule("games/SellLemons/modules/autofarm.lua", gameContext)
     context.LoadModule("games/SellLemons/modules/misc.lua", gameContext)
+    context.LoadModule("games/SellLemons/modules/upgrades.lua", gameContext)
 end

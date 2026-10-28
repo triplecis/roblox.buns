@@ -550,6 +550,68 @@ Test("Sell Lemons exposes single-select drop type for both autofarm methods", fu
     Context.Destroy()
 end)
 
+Test("Sell Lemons discovers Upgrade remotes under the local player's Purchases", function()
+    local F = Fixture({ GameId = 7395930870 })
+    local function MakeTycoon(Name, Owner)
+        local Tycoon = Node(Name, "Folder")
+        local OwnerValue = Node("Owner", "ObjectValue")
+        OwnerValue.Value = Owner
+        table.insert(Tycoon.Children, OwnerValue)
+        table.insert(F.Workspace.Children, Tycoon)
+        return Tycoon
+    end
+    local function AddUpgrade(Tycoon, Names, UpgradeName)
+        local Parent = Tycoon
+        for _, Name in ipairs(Names) do
+            local Child
+            if Name == "Upgrade" then
+                Child = Node(Name, "RemoteFunction")
+                function Child:InvokeServer(Value)
+                    table.insert(F.UpgradeRequests, {
+                        Tycoon = Tycoon.Name,
+                        Name = UpgradeName,
+                        Value = Value,
+                    })
+                end
+            else
+                Child = Node(Name, "Folder")
+            end
+            table.insert(Parent.Children, Child)
+            Parent = Child
+        end
+    end
+
+    local OtherTycoon = MakeTycoon("Tycoon3", F.OtherPlayer)
+    local LocalTycoon = MakeTycoon("Tycoon7", F.Player)
+    local Paths = {
+        { "Lemon Stand", { "Purchases", "Lemon Stand", "Lemon Stand", "Lemon Stand", "Upgrade" } },
+        { "LemonDash", { "Purchases", "LemonDash", "LemonDash", "LemonDash", "Upgrade" } },
+        { "Lemon Depot", { "Purchases", "Lemon Depot", "Lemon Depot", "Lemon Depot", "Upgrade" } },
+    }
+    F.UpgradeRequests = {}
+    for _, Entry in ipairs(Paths) do
+        AddUpgrade(OtherTycoon, Entry[2], Entry[1])
+        AddUpgrade(LocalTycoon, Entry[2], Entry[1])
+    end
+
+    local Context = assert(F:Load())
+    local UpgradeLocations = F.Lib.Controls.SellLemonsUpgradeLocations
+    assert(UpgradeLocations)
+    Equal(UpgradeLocations.Multi, false)
+    Equal(#UpgradeLocations.Items, 3)
+    assert(table.find(UpgradeLocations.Items, "Purchases.Lemon Stand.Lemon Stand.Lemon Stand.Upgrade"))
+    assert(table.find(UpgradeLocations.Items, "Purchases.LemonDash.LemonDash.LemonDash.Upgrade"))
+    assert(table.find(UpgradeLocations.Items, "Purchases.Lemon Depot.Lemon Depot.Lemon Depot.Upgrade"))
+    UpgradeLocations:Set("Purchases.LemonDash.LemonDash.LemonDash.Upgrade")
+    assert(F.Lib.Buttons["Invoke selected Upgrade"])
+    F.Lib.Buttons["Invoke selected Upgrade"]()
+    Equal(#F.UpgradeRequests, 1)
+    Equal(F.UpgradeRequests[1].Tycoon, "Tycoon7")
+    Equal(F.UpgradeRequests[1].Name, "LemonDash")
+    Equal(F.UpgradeRequests[1].Value, 1)
+    Context.Destroy()
+end)
+
 Test("Sell Lemons sticky FOV, WalkSpeed, and jump settings reapply and restore", function()
     local F = Fixture({ GameId = 7395930870 })
     local Context = assert(F:Load())
